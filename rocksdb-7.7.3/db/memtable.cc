@@ -381,14 +381,19 @@ class MemTableIterator : public InternalIterator {
         status_(Status::OK()),
         logger_(mem.moptions_.info_log) {
     if (use_range_del_table) {
-      iter_ = mem.range_del_table_->GetIterator(arena);
+      // adding read_options.iterator_context (i.e., mbr from query) to enable mbr search in iterator
+      iter_ = mem.range_del_table_->GetIterator(read_options.iterator_context,
+                                                arena);
     } else if (prefix_extractor_ != nullptr && !read_options.total_order_seek &&
                !read_options.auto_prefix_mode) {
       // Auto prefix mode is not implemented in memtable yet.
       bloom_ = mem.bloom_filter_.get();
-      iter_ = mem.table_->GetDynamicPrefixIterator(arena);
+      // adding iterator_context
+      iter_ = mem.table_->GetDynamicPrefixIterator(read_options.iterator_context,
+                                                   arena);
     } else {
-      iter_ = mem.table_->GetIterator(arena);
+      // adding iterator_context
+      iter_ = mem.table_->GetIterator(read_options.iterator_context, arena);
     }
     status_.PermitUncheckedError();
   }

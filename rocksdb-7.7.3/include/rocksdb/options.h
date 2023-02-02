@@ -59,6 +59,8 @@ class FileSystem;
 
 struct Options;
 struct DbPath;
+// Adding Iterator_context
+struct IteratorContext {};
 
 using FileTypeSet = SmallEnumSet<FileType, FileType::kBlobFile>;
 
@@ -1699,6 +1701,9 @@ struct ReadOptions {
   //
   // Default: true
   bool optimize_multiget_for_io;
+
+  // Adding Iterator_context
+  IteratorContext* iterator_context;
 
   ReadOptions();
   ReadOptions(bool cksum, bool cache);

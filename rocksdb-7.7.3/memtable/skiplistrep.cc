@@ -11,6 +11,7 @@
 #include "rocksdb/memtablerep.h"
 #include "rocksdb/utilities/options_type.h"
 #include "util/string_util.h"
+#include "util/rtree.h"
 
 namespace ROCKSDB_NAMESPACE {
 namespace {
@@ -21,6 +22,8 @@ class SkipListRep : public MemTableRep {
   const size_t lookahead_;
 
   friend class LookaheadIterator;
+  friend class SkipListMbrRep;
+
 public:
  explicit SkipListRep(const MemTableRep::KeyComparator& compare,
                       Allocator* allocator, const SliceTransform* transform,
@@ -321,7 +324,9 @@ public:
     InlineSkipList<const MemTableRep::KeyComparator&>::Iterator prev_;
   };
 
-  MemTableRep::Iterator* GetIterator(Arena* arena = nullptr) override {
+  MemTableRep::Iterator* GetIterator(IteratorContext* iterator_context,
+                                     Arena* arena = nullptr) override {
+    (void)iterator_context;
     if (lookahead_ > 0) {
       void *mem =
         arena ? arena->AllocateAligned(sizeof(SkipListRep::LookaheadIterator))
@@ -333,6 +338,77 @@ public:
               : operator new(sizeof(SkipListRep::Iterator));
       return new (mem) SkipListRep::Iterator(&skip_list_);
     }
+  }
+};
+class SkipListMbrRep : public SkipListRep {
+  public:
+    explicit SkipListMbrRep(const MemTableRep::KeyComparator& compare,
+                                  Allocator* allocator,
+                                  const SliceTransform* transform,
+                                  const size_t lookahead) :
+            SkipListRep(compare, allocator, transform, lookahead) {}
+
+    class Iterator : public SkipListRep::Iterator {
+      public:
+        explicit Iterator(
+                const InlineSkipList<const MemTableRep::KeyComparator&>* list,
+                IteratorContext* iterator_context)
+                : SkipListRep::Iterator(list) {
+            if (iterator_context != nullptr){
+                RtreeIteratorContext* context =
+                    reinterpret_cast<RtreeIteratorContext*>(iterator_context);
+                Slice query_slice = Slice(context->query_mbr);
+                Slice keypath_slice;
+                GetLengthPrefixedSlice(&query_slice, &keypath_slice);
+                query_keypath_ = keypath_slice.ToString();
+                query_mbr_ = ReadQueryMbr(query_slice);
+            }
+        }
+
+        virtual void Next() override {
+            SkipListRep::Iterator::Next();
+            NextIfDisjoint();
+        }
+
+        virtual void SeekToFirst() override {
+            SkipListRep::Iterator::SeekToFirst();
+            NextIfDisjoint();
+        }
+
+      private:
+        // The querying minimum bounding region
+        Mbr query_mbr_;
+        // Keypath of the query (to ensure querying the data of the same keypath)
+        // keypath is kind of pre-define index which physically partition the data
+        std::string query_keypath_;
+
+        // The NextIfDisjoint skip key if it does not intersect with the query mbr
+        void NextIfDisjoint() {
+            if (Valid() && !query_keypath_.empty()) {
+                Slice internal_key = GetLengthPrefixedSlice(key());
+                Slice key = ExtractUserKey(internal_key);
+                Slice keypath;
+                GetLengthPrefixedSlice(&key, &keypath);
+
+                if (keypath.compare(Slice(query_keypath_)) != 0) {
+                    Next();
+                } else {
+                    Mbr mbr = ReadKeyMbr(key);
+                    if (!IntersectMbr(mbr, query_mbr_)) {
+                        Next();
+                    }
+                }
+            }
+        }
+    };
+
+  virtual MemTableRep::Iterator* GetIterator(
+      IteratorContext* iterator_context,
+      Arena* arena = nullptr) override {
+    void *mem =
+        arena ? arena->AllocateAligned(sizeof(SkipListMbrRep::Iterator))
+              : operator new(sizeof(SkipListMbrRep::Iterator));
+    return new (mem) SkipListMbrRep::Iterator(&skip_list_, iterator_context);
   }
 };
 }
@@ -362,6 +438,12 @@ MemTableRep* SkipListFactory::CreateMemTableRep(
     const MemTableRep::KeyComparator& compare, Allocator* allocator,
     const SliceTransform* transform, Logger* /*logger*/) {
   return new SkipListRep(compare, allocator, transform, lookahead_);
+}
+
+MemTableRep* SkipListMbrFactory::CreateMemTableRep(
+        const MemTableRep::KeyComparator& compare, Allocator* allocator,
+        const SliceTransform* transform, Logger* /*logger*/) {
+    return new SkipListMbrRep(compare, allocator, transform, lookahead_);
 }
 
 }  // namespace ROCKSDB_NAMESPACE
