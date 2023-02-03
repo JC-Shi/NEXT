@@ -3,6 +3,11 @@ add_executable(simple_example
 target_link_libraries(simple_example
   ${ROCKSDB_LIB})
 
+add_executable(spatial_query_example
+  spatial_query_example.cc)
+target_link_libraries(spatial_query_example
+  ${ROCKSDB_LIB})
+
 add_executable(column_families_example
   column_families_example.cc)
 target_link_libraries(column_families_example
