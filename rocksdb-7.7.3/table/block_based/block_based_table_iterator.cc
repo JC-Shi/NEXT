@@ -8,6 +8,8 @@
 // found in the LICENSE file. See the AUTHORS file for names of contributors.
 #include "table/block_based/block_based_table_iterator.h"
 
+#include <iostream>
+
 namespace ROCKSDB_NAMESPACE {
 
 void BlockBasedTableIterator::SeekToFirst() { SeekImpl(nullptr, false); }
@@ -18,6 +20,7 @@ void BlockBasedTableIterator::Seek(const Slice& target) {
 
 void BlockBasedTableIterator::SeekImpl(const Slice* target,
                                        bool async_prefetch) {
+  // std::cout << "BlockBasedTableIterator SeekToFirst" << std::endl;
   bool is_first_pass = true;
   if (async_read_in_progress_) {
     AsyncInitDataBlock(false);
@@ -202,6 +205,7 @@ void BlockBasedTableIterator::Next() {
     return;
   }
   assert(block_iter_points_to_real_block_);
+  // std::cout << "BlockBasedTableIterator calling block_iter_.next" << std::endl;
   block_iter_.Next();
   FindKeyForward();
   CheckOutOfBound();
@@ -259,6 +263,7 @@ void BlockBasedTableIterator::InitDataBlock() {
         rep, data_block_handle, read_options_.readahead_size, is_for_compaction,
         /*no_sequential_checking=*/false, read_options_.rate_limiter_priority);
     Status s;
+    // std::cout << "Created NewDataBlockIterator with InitDataBlock" << std::endl;
     table_->NewDataBlockIterator<DataBlockIter>(
         read_options_, data_block_handle, &block_iter_, BlockType::kData,
         /*get_context=*/nullptr, &lookup_context_,
@@ -297,6 +302,7 @@ void BlockBasedTableIterator::AsyncInitDataBlock(bool is_first_pass) {
           read_options_.rate_limiter_priority);
 
       Status s;
+      // std::cout << "Created NewDataBlockIterator with AsyncInitDataBlock" << std::endl;
       table_->NewDataBlockIterator<DataBlockIter>(
           read_options_, data_block_handle, &block_iter_, BlockType::kData,
           /*get_context=*/nullptr, &lookup_context_,
@@ -312,6 +318,7 @@ void BlockBasedTableIterator::AsyncInitDataBlock(bool is_first_pass) {
     // Second pass will call the Poll to get the data block which has been
     // requested asynchronously.
     Status s;
+    // std::cout << "Created NewDataBlockIterator with AsyncInitDataBlock" << std::endl;
     table_->NewDataBlockIterator<DataBlockIter>(
         read_options_, data_block_handle, &block_iter_, BlockType::kData,
         /*get_context=*/nullptr, &lookup_context_,

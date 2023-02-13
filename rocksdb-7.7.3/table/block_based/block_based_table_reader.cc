@@ -58,6 +58,7 @@
 #include "table/block_based/hash_index_reader.h"
 #include "table/block_based/partitioned_filter_block.h"
 #include "table/block_based/partitioned_index_reader.h"
+// #include "table/block_based/rtree_index_reader.h"
 #include "table/block_fetcher.h"
 #include "table/format.h"
 #include "table/get_context.h"
@@ -1559,6 +1560,39 @@ DataBlockIter* BlockBasedTable::InitBlockIterator<DataBlockIter>(
 }
 
 template <>
+DataBlockIter* BlockBasedTable::InitBlockIterator<DataBlockIter>(
+    const Rep* rep, Block* block, BlockType block_type,
+    DataBlockIter* input_iter, bool block_contents_pinned, RtreeIteratorContext* iterator_context) {
+  return block->NewSpatialDataIterator(rep->internal_comparator.user_comparator(),
+                                rep->get_global_seqno(block_type), input_iter,
+                                rep->ioptions.stats, block_contents_pinned, iterator_context);
+}
+
+// template <>
+// RtreeBlockIter* BlockBasedTable::InitBlockIterator(
+//     const Rep* rep, Block* block, BlockType block_type,
+//     DataBlockIter* input_iter, bool block_contents_pinned, RtreeIteratorContext* iterator_context) {
+//   RtreeBlockIter* rtree_input_iter =
+//           reinterpret_cast<RtreeBlockIter*>(input_iter);
+//   return block->NewRtreeIterator(rep->internal_comparator.user_comparator(),
+//                                 rep->get_global_seqno(block_type), rtree_input_iter,
+//                                 rep->ioptions.stats, block_contents_pinned, iterator_context);
+// }
+
+template <>
+IndexBlockIter* BlockBasedTable::InitBlockIterator<IndexBlockIter>(
+    const Rep* rep, Block* block, BlockType block_type,
+    IndexBlockIter* input_iter, bool block_contents_pinned, RtreeIteratorContext* iterator_context) {
+  (void)iterator_context;
+  return block->NewIndexIterator(
+      rep->internal_comparator.user_comparator(),
+      rep->get_global_seqno(block_type), input_iter, rep->ioptions.stats,
+      /* total_order_seek */ true, rep->index_has_first_key,
+      rep->index_key_includes_seq, rep->index_value_is_full,
+      block_contents_pinned);
+}
+
+template <>
 IndexBlockIter* BlockBasedTable::InitBlockIterator<IndexBlockIter>(
     const Rep* rep, Block* block, BlockType block_type,
     IndexBlockIter* input_iter, bool block_contents_pinned) {
@@ -1569,6 +1603,15 @@ IndexBlockIter* BlockBasedTable::InitBlockIterator<IndexBlockIter>(
       rep->index_key_includes_seq, rep->index_value_is_full,
       block_contents_pinned);
 }
+
+// template <>
+// RtreeBlockIter* BlockBasedTable::InitBlockIterator<RtreeBlockIter>(
+//     const Rep* rep, Block* block, BlockType block_type,
+//     RtreeBlockIter* input_iter, bool block_contents_pinned, RtreeIteratorContext* iterator_context) {
+//   return block->NewRtreeIterator(rep->internal_comparator.user_comparator(),
+//                                 rep->get_global_seqno(block_type), input_iter,
+//                                 rep->ioptions.stats, block_contents_pinned, iterator_context);
+// }
 
 // If contents is nullptr, this function looks up the block caches for the
 // data block referenced by handle, and read the block from disk if necessary.
@@ -2632,6 +2675,10 @@ Status BlockBasedTable::CreateIndexReader(
                                        index_reader);
       }
     }
+    // case BlockBasedTableOptions::kRtreeSearch: {
+    //   return RtreeIndexReader::Create(this, ro, prefetch_buffer, use_cache,
+    //                                   prefetch, pin, lookup_context, index_reader);
+    // }
     default: {
       std::string error_message =
           "Unrecognized index type: " + std::to_string(rep_->index_type);

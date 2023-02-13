@@ -11,6 +11,7 @@
 #include <stddef.h>
 #include <stdint.h>
 
+#include <iostream>
 #include <string>
 #include <vector>
 
@@ -26,6 +27,7 @@
 #include "table/internal_iterator.h"
 #include "test_util/sync_point.h"
 #include "util/random.h"
+#include "util/rtree.h"
 
 namespace ROCKSDB_NAMESPACE {
 
@@ -37,6 +39,7 @@ class DataBlockIter;
 class IndexBlockIter;
 class MetaBlockIter;
 class BlockPrefixIndex;
+class RtreeBlockIter;
 
 // BlockReadAmpBitmap is a bitmap that map the ROCKSDB_NAMESPACE::Block data
 // bytes to a bitmap with ratio bytes_per_bit. Whenever we access a range of
@@ -193,6 +196,13 @@ class Block {
                                  DataBlockIter* iter = nullptr,
                                  Statistics* stats = nullptr,
                                  bool block_contents_pinned = false);
+  
+  DataBlockIter* NewSpatialDataIterator(const Comparator* raw_ucmp,
+                                 SequenceNumber global_seqno,
+                                 DataBlockIter* iter,
+                                 Statistics* stats,
+                                 bool block_contents_pinned,
+                                 RtreeIteratorContext* context);
 
   // Returns an MetaBlockIter for iterating over blocks containing metadata
   // (like Properties blocks).  Unlike data blocks, the keys for these blocks
@@ -231,6 +241,13 @@ class Block {
                                    bool key_includes_seq, bool value_is_full,
                                    bool block_contents_pinned = false,
                                    BlockPrefixIndex* prefix_index = nullptr);
+
+  RtreeBlockIter* NewRtreeIterator(const Comparator* raw_ucmp,
+                                   SequenceNumber global_seqno,
+                                   RtreeBlockIter* iter,
+                                   Statistics* stats,
+                                   bool block_contents_pinned,
+                                   RtreeIteratorContext* context);
 
   // Report an approximation of how much memory has been used.
   size_t ApproximateMemoryUsage() const;
@@ -396,6 +413,7 @@ class BlockIter : public InternalIteratorBase<TValue> {
     assert(data_ == nullptr);  // Ensure it is called only once
     assert(num_restarts > 0);  // Ensure the param is valid
 
+
     icmp_ = std::make_unique<InternalKeyComparator>(raw_ucmp);
     data_ = data;
     restarts_ = restarts;
@@ -485,7 +503,7 @@ class BlockIter : public InternalIteratorBase<TValue> {
                               bool is_index_key_result);
 };
 
-class DataBlockIter final : public BlockIter<Slice> {
+class DataBlockIter : public BlockIter<Slice> {
  public:
   DataBlockIter()
       : BlockIter(), read_amp_bitmap_(nullptr), last_bitmap_offset_(0) {}
@@ -496,6 +514,14 @@ class DataBlockIter final : public BlockIter<Slice> {
       : DataBlockIter() {
     Initialize(raw_ucmp, data, restarts, num_restarts, global_seqno,
                read_amp_bitmap, block_contents_pinned, data_block_hash_index);
+  }
+  DataBlockIter(const Comparator* raw_ucmp, const char* data, uint32_t restarts,
+                uint32_t num_restarts, SequenceNumber global_seqno,
+                BlockReadAmpBitmap* read_amp_bitmap, bool block_contents_pinned,
+                DataBlockHashIndex* data_block_hash_index, const std::string& query)
+      : DataBlockIter() {
+    Initialize(raw_ucmp, data, restarts, num_restarts, global_seqno,
+               read_amp_bitmap, block_contents_pinned, data_block_hash_index, query);
   }
   void Initialize(const Comparator* raw_ucmp, const char* data,
                   uint32_t restarts, uint32_t num_restarts,
@@ -509,6 +535,29 @@ class DataBlockIter final : public BlockIter<Slice> {
     read_amp_bitmap_ = read_amp_bitmap;
     last_bitmap_offset_ = current_ + 1;
     data_block_hash_index_ = data_block_hash_index;
+    is_spatial_ = false;
+  }
+
+  void Initialize(const Comparator* raw_ucmp, const char* data,
+                  uint32_t restarts, uint32_t num_restarts,
+                  SequenceNumber global_seqno,
+                  BlockReadAmpBitmap* read_amp_bitmap,
+                  bool block_contents_pinned,
+                  DataBlockHashIndex* data_block_hash_index,
+                  const std::string& query) {
+    InitializeBase(raw_ucmp, data, restarts, num_restarts, global_seqno,
+                   block_contents_pinned);
+    raw_key_.SetIsUserKey(false);
+    read_amp_bitmap_ = read_amp_bitmap;
+    last_bitmap_offset_ = current_ + 1;
+    data_block_hash_index_ = data_block_hash_index;
+    // The query contains also the keypath, remove it first
+    Slice ignore;
+    Slice query_slice(query);
+    GetLengthPrefixedSlice(&query_slice, &ignore);
+    query_mbr_ = ReadQueryMbr(query_slice);
+    is_spatial_ = true;
+    // std::cout << "query_mbr_: " << query_mbr_ << std::endl;
   }
 
   Slice value() const override {
@@ -544,14 +593,15 @@ class DataBlockIter final : public BlockIter<Slice> {
  protected:
   friend Block;
   inline bool ParseNextDataKey(bool* is_shared);
-  void SeekToFirstImpl() override;
+  inline bool ParseNextSpatialDataKey(bool* is_shared);
+  virtual void SeekToFirstImpl();
   void SeekToLastImpl() override;
   void SeekImpl(const Slice& target) override;
   void SeekForPrevImpl(const Slice& target) override;
-  void NextImpl() override;
+  virtual void NextImpl();
   void PrevImpl() override;
+  virtual void PrintType();
 
- private:
   // read-amp bitmap
   BlockReadAmpBitmap* read_amp_bitmap_;
   // last `current_` value we report to read-amp bitmp
@@ -581,6 +631,13 @@ class DataBlockIter final : public BlockIter<Slice> {
   int32_t prev_entries_idx_ = -1;
 
   DataBlockHashIndex* data_block_hash_index_;
+
+  bool is_spatial_;
+  Mbr query_mbr_;
+
+  bool IntersectMbr(
+        const Slice& aa_orig,
+        Mbr bb);
 
   bool SeekForGetImpl(const Slice& target);
 };
@@ -738,6 +795,59 @@ class IndexBlockIter final : public BlockIter<IndexValue> {
   // When value_delta_encoded_ is enabled it decodes the value which is assumed
   // to be BlockHandle and put it to decoded_value_
   inline void DecodeCurrentValue(bool is_shared);
+};
+
+class RtreeBlockIter final : public DataBlockIter {
+  public:
+    RtreeBlockIter()
+      : DataBlockIter() {}
+    RtreeBlockIter(const Comparator* raw_ucmp, const char* data, uint32_t restarts,
+                uint32_t num_restarts, SequenceNumber global_seqno,
+                BlockReadAmpBitmap* read_amp_bitmap, bool block_contents_pinned,
+                DataBlockHashIndex* data_block_hash_index, const std::string& query)
+        : RtreeBlockIter() {
+      Initialize(raw_ucmp, data, restarts, num_restarts, global_seqno,
+               read_amp_bitmap, block_contents_pinned, data_block_hash_index, query);
+    };
+
+    void Initialize(const Comparator* raw_ucmp, const char* data,
+                  uint32_t restarts, uint32_t num_restarts,
+                  SequenceNumber global_seqno,
+                  BlockReadAmpBitmap* read_amp_bitmap,
+                  bool block_contents_pinned,
+                  DataBlockHashIndex* data_block_hash_index, const std::string& query) {
+      // std::cout << "RtreeBlockIter InitializeBase" << std::endl;
+      InitializeBase(raw_ucmp, data, restarts, num_restarts, global_seqno,
+                   block_contents_pinned);
+      raw_key_.SetIsUserKey(false);
+      read_amp_bitmap_ = read_amp_bitmap;
+      last_bitmap_offset_ = current_ + 1;
+      data_block_hash_index_ = data_block_hash_index;
+      // std::cout << "making RtreeBlockIter specific initialization" << std::endl;
+      // The query contains also the keypath, remove it first
+      Slice ignore;
+      Slice query_slice(query);
+      GetLengthPrefixedSlice(&query_slice, &ignore);
+      query_mbr_ = ReadQueryMbr(query_slice);
+      // std::cout << "query_mbr_: " << query_mbr_ << std::endl;
+    }
+
+
+  protected:
+    inline bool ParseNextRtreeKey();
+    // virtual void Next() override;
+    void NextImpl() override;
+
+    // virtual void SeekToFirst() override;
+    void SeekToFirstImpl() override;
+    void PrintType() override;
+
+  private:
+    Mbr query_mbr_;
+
+    bool IntersectMbr(
+        const Slice& aa_orig,
+        Mbr bb);
 };
 
 }  // namespace ROCKSDB_NAMESPACE

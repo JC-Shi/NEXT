@@ -4,7 +4,6 @@
 //  (found in the LICENSE.Apache file in the root directory).
 //
 #include <random>
-#include <iostream>
 
 #include "db/memtable.h"
 #include "memory/arena.h"
@@ -355,7 +354,6 @@ class SkipListMbrRep : public SkipListRep {
                 const InlineSkipList<const MemTableRep::KeyComparator&>* list,
                 IteratorContext* iterator_context)
                 : SkipListRep::Iterator(list) {
-            std::cout << "created SkipListMbrRep iterator" << std::endl;
             if (iterator_context != nullptr){
                 RtreeIteratorContext* context =
                     reinterpret_cast<RtreeIteratorContext*>(iterator_context);
@@ -396,9 +394,6 @@ class SkipListMbrRep : public SkipListRep {
                     Next();
                 } else {
                     Mbr mbr = ReadKeyMbr(key);
-                    std::cout << mbr << std::endl;
-                    std::cout << query_mbr_ << std::endl;
-                    std::cout << IntersectMbr(mbr, query_mbr_) << std::endl;
                     if (!IntersectMbr(mbr, query_mbr_)) {
                         Next();
                     }

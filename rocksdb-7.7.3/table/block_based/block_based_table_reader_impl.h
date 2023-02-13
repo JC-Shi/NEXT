@@ -11,6 +11,7 @@
 
 #include "table/block_based/reader_common.h"
 
+
 // The file contains some member functions of BlockBasedTable that
 // cannot be implemented in block_based_table_reader.cc because
 // it's called by other files (e.g. block_based_iterator.h) and
@@ -31,11 +32,12 @@ TBlockIter* BlockBasedTable::NewDataBlockIterator(
   PERF_TIMER_GUARD(new_table_block_iter_nanos);
 
   TBlockIter* iter = input_iter != nullptr ? input_iter : new TBlockIter;
+
   if (!s.ok()) {
     iter->Invalidate(s);
     return iter;
   }
-
+  
   CachableEntry<Block> block;
   if (rep_->uncompression_dict_reader && block_type == BlockType::kData) {
     CachableEntry<UncompressionDict> uncompression_dict;
@@ -83,8 +85,21 @@ TBlockIter* BlockBasedTable::NewDataBlockIterator(
   const bool block_contents_pinned =
       block.IsCached() ||
       (!block.GetValue()->own_bytes() && rep_->immortal_table);
-  iter = InitBlockIterator<TBlockIter>(rep_, block.GetValue(), block_type, iter,
+
+  if (ro.iterator_context == nullptr) {
+    iter = InitBlockIterator<TBlockIter>(rep_, block.GetValue(), block_type, iter,
                                        block_contents_pinned);
+  }
+  else {
+    RtreeIteratorContext* iterator_context =
+        reinterpret_cast<RtreeIteratorContext*>(ro.iterator_context);
+    // // RtreeBlockIter* rtree_iter =
+    // //       reinterpret_cast<RtreeBlockIter*>(iter);
+    // iter = InitBlockIterator(rep_, block.GetValue(), BlockType::kData, iter,
+    //                                    block_contents_pinned, iterator_context);
+    iter = InitBlockIterator(rep_, block.GetValue(), BlockType::kData, iter,
+                                       block_contents_pinned, iterator_context);
+  }
 
   if (!block.IsCached()) {
     if (!ro.fill_cache) {
@@ -125,12 +140,14 @@ TBlockIter* BlockBasedTable::NewDataBlockIterator(const ReadOptions& ro,
   PERF_TIMER_GUARD(new_table_block_iter_nanos);
 
   TBlockIter* iter = input_iter != nullptr ? input_iter : new TBlockIter;
+  
   if (!s.ok()) {
     iter->Invalidate(s);
     return iter;
   }
 
   assert(block.GetValue() != nullptr);
+
   // Block contents are pinned and it is still pinned after the iterator
   // is destroyed as long as cleanup functions are moved to another object,
   // when:
@@ -141,8 +158,20 @@ TBlockIter* BlockBasedTable::NewDataBlockIterator(const ReadOptions& ro,
   const bool block_contents_pinned =
       block.IsCached() ||
       (!block.GetValue()->own_bytes() && rep_->immortal_table);
-  iter = InitBlockIterator<TBlockIter>(rep_, block.GetValue(), BlockType::kData,
-                                       iter, block_contents_pinned);
+  if (ro.iterator_context == nullptr) {
+    iter = InitBlockIterator<TBlockIter>(rep_, block.GetValue(), BlockType::kData,
+                                        iter, block_contents_pinned);
+  }
+  else {
+    RtreeIteratorContext* iterator_context =
+        reinterpret_cast<RtreeIteratorContext*>(ro.iterator_context);
+    // // RtreeBlockIter* rtree_iter =
+    // //       reinterpret_cast<RtreeBlockIter*>(iter);
+    // iter = InitBlockIterator(rep_, block.GetValue(), BlockType::kData, iter,
+    //                                    block_contents_pinned, iterator_context);
+    iter = InitBlockIterator(rep_, block.GetValue(), BlockType::kData, iter,
+                                       block_contents_pinned, iterator_context);
+  }
 
   if (!block.IsCached()) {
     if (!ro.fill_cache) {

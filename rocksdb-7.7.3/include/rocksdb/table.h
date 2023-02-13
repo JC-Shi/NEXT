@@ -229,6 +229,8 @@ struct BlockBasedTableOptions {
     // Makes the index significantly bigger (2x or more), especially when keys
     // are long.
     kBinarySearchWithFirstKey = 0x03,
+
+    kRtreeSearch = 0x04,
   };
 
   IndexType index_type = kBinarySearch;

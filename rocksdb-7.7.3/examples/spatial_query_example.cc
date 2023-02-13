@@ -130,7 +130,7 @@ int main() {
 //    block_based_options.index_type = BlockBasedTableOptions::kRtreeSearch;
 //    block_based_options.flush_block_policy_factory.reset(
 //            new NoiseFlushBlockPolicyFactory());
-//    options.table_factory.reset(NewBlockBasedTableFactory(block_based_options));
+    options.table_factory.reset(NewBlockBasedTableFactory(block_based_options));
     options.memtable_factory.reset(new rocksdb::SkipListMbrFactory);
 
     const std::string keypath = "keypath1";
@@ -146,12 +146,14 @@ int main() {
         assert(s.ok());
 
         std::string key1 = serialize_key(keypath, 516, 22.214);
+        std::cout << "key1: " << key1 << std::endl;
 
         // Put key-value
         s = db->Put(WriteOptions(), key1, "");
         assert(s.ok());
 
         std::string key2 = serialize_key(keypath, 1124, 4.1432);
+        std::cout << "key2: " << key2 << std::endl;
         s = db->Put(WriteOptions(), key2, "");
         assert(s.ok());
     }
