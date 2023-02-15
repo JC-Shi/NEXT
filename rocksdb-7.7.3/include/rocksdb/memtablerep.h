@@ -53,6 +53,8 @@ class LookupKey;
 class SliceTransform;
 class Logger;
 struct DBOptions;
+// creating struct for IteratorContext
+struct IteratorContext;
 
 using KeyHandle = void*;
 
@@ -262,7 +264,11 @@ class MemTableRep {
   //        When destroying the iterator, the caller will not call "delete"
   //        but Iterator::~Iterator() directly. The destructor needs to destroy
   //        all the states but those allocated in arena.
-  virtual Iterator* GetIterator(Arena* arena = nullptr) = 0;
+  // virtual Iterator* GetIterator(Arena* arena = nullptr) = 0;
+  // adding iterator_context
+  virtual Iterator* GetIterator(
+          IteratorContext* iterator_context,
+          Arena* arena = nullptr) = 0;
 
   // Return an iterator that has a special Seek semantics. The result of
   // a Seek might only include keys with the same prefix as the target key.
@@ -270,8 +276,14 @@ class MemTableRep {
   //        When destroying the iterator, the caller will not call "delete"
   //        but Iterator::~Iterator() directly. The destructor needs to destroy
   //        all the states but those allocated in arena.
-  virtual Iterator* GetDynamicPrefixIterator(Arena* arena = nullptr) {
-    return GetIterator(arena);
+  //  virtual Iterator* GetDynamicPrefixIterator(Arena* arena = nullptr) {
+  //    return GetIterator(arena);
+  //  }
+  //adding iterator_context
+  virtual Iterator* GetDynamicPrefixIterator(
+          IteratorContext* iterator_context = nullptr,
+          Arena* arena = nullptr) {
+      return GetIterator(iterator_context, arena);
   }
 
   // Return true if the current MemTableRep supports merge operator.
@@ -357,6 +369,25 @@ class SkipListFactory : public MemTableRepFactory {
 
  private:
   size_t lookahead_;
+};
+
+// Adding SkipListMbrFactory
+class SkipListMbrFactory : public MemTableRepFactory {
+public:
+    explicit SkipListMbrFactory(size_t lookahead = 0) : lookahead_(lookahead) {}
+
+    // Methods for MemTableRepFactory class overrides
+    using MemTableRepFactory::CreateMemTableRep;
+    virtual MemTableRep* CreateMemTableRep(const MemTableRep::KeyComparator&,
+                                           Allocator*, const SliceTransform*,
+                                           Logger* logger) override;
+
+    virtual const char* Name() const override {return "SkipListMbrFactory";}
+
+    bool IsInsertConcurrentlySupported() const override { return true; }
+
+private:
+    const size_t lookahead_;
 };
 
 #ifndef ROCKSDB_LITE

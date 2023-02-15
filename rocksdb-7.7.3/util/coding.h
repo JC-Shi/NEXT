@@ -18,10 +18,12 @@
 #pragma once
 #include <algorithm>
 #include <string>
+#include <string.h>
+#include <stdint.h>
 
-#include "port/port.h"
+#include "../port/port.h"
 #include "rocksdb/slice.h"
-#include "util/coding_lean.h"
+#include "../util/coding_lean.h"
 
 // Some processors does not allow unaligned access to memory
 #if defined(__sparc)
@@ -120,36 +122,36 @@ inline const char* GetVarint32Ptr(const char* p,
 
 // Pull the last 8 bits and cast it to a character
 inline void PutFixed16(std::string* dst, uint16_t value) {
-  if (port::kLittleEndian) {
-    dst->append(const_cast<const char*>(reinterpret_cast<char*>(&value)),
-                sizeof(value));
-  } else {
+//  if (port::kLittleEndian) {
+//    dst->append(const_cast<const char*>(reinterpret_cast<char*>(&value)),
+//                sizeof(value));
+//  } else {
     char buf[sizeof(value)];
     EncodeFixed16(buf, value);
     dst->append(buf, sizeof(buf));
-  }
+//  }
 }
 
 inline void PutFixed32(std::string* dst, uint32_t value) {
-  if (port::kLittleEndian) {
-    dst->append(const_cast<const char*>(reinterpret_cast<char*>(&value)),
-      sizeof(value));
-  } else {
+//  if (port::kLittleEndian) {
+//    dst->append(const_cast<const char*>(reinterpret_cast<char*>(&value)),
+//      sizeof(value));
+//  } else {
     char buf[sizeof(value)];
     EncodeFixed32(buf, value);
     dst->append(buf, sizeof(buf));
-  }
+//  }
 }
 
 inline void PutFixed64(std::string* dst, uint64_t value) {
-  if (port::kLittleEndian) {
-    dst->append(const_cast<const char*>(reinterpret_cast<char*>(&value)),
-      sizeof(value));
-  } else {
+//  if (port::kLittleEndian) {
+//    dst->append(const_cast<const char*>(reinterpret_cast<char*>(&value)),
+//      sizeof(value));
+//  } else {
     char buf[sizeof(value)];
     EncodeFixed64(buf, value);
     dst->append(buf, sizeof(buf));
-  }
+//  }
 }
 
 inline void PutVarint32(std::string* dst, uint32_t v) {

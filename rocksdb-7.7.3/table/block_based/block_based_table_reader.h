@@ -338,6 +338,21 @@ class BlockBasedTable : public TableReader {
                                        TBlockIter* input_iter,
                                        bool block_contents_pinned);
 
+  template <typename TBlockIter>
+  static TBlockIter* InitBlockIterator(const Rep* rep, Block* block,
+                                       BlockType block_type,
+                                       TBlockIter* input_iter,
+                                       bool block_contents_pinned,
+                                       RtreeIteratorContext* iterator_context);
+
+  // Block::NewRtreeIterator().
+  // template <typename TBlockIter>
+  // static RtreeBlockIter* InitBlockIterator(const Rep* rep, Block* block,
+  //                                      BlockType block_type,
+  //                                      DataBlockIter* input_iter,
+  //                                      bool block_contents_pinned,
+  //                                      RtreeIteratorContext* iterator_context);
+
   // If block cache enabled (compressed or uncompressed), looks for the block
   // identified by handle in (1) uncompressed cache, (2) compressed cache, and
   // then (3) file. If found, inserts into the cache(s) that were searched

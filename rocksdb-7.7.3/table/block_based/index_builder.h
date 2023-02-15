@@ -20,6 +20,7 @@
 #include "table/block_based/block_based_table_factory.h"
 #include "table/block_based/block_builder.h"
 #include "table/format.h"
+#include "util/rtree.h"
 
 namespace ROCKSDB_NAMESPACE {
 // The interface for building index.
@@ -452,4 +453,124 @@ class PartitionedIndexBuilder : public IndexBuilder {
   bool cut_filter_block = false;
   BlockHandle last_encoded_handle_;
 };
+
+// class RtreeIndexBuilder : public IndexBuilder {
+//  public:
+//   explicit RtreeIndexBuilder(
+//       const InternalKeyComparator* comparator,
+//       const int index_block_restart_interval, const uint32_t format_version,
+//       const bool use_value_delta_encoding,
+//       BlockBasedTableOptions::IndexShorteningMode shortening_mode,
+//       bool include_first_key)
+//       : IndexBuilder(comparator),
+//         index_block_builder_(index_block_restart_interval,
+//                              true /*use_delta_encoding*/,
+//                              use_value_delta_encoding),
+//         index_block_builder_without_seq_(index_block_restart_interval,
+//                                          true /*use_delta_encoding*/,
+//                                          use_value_delta_encoding),
+//         use_value_delta_encoding_(use_value_delta_encoding),
+//         include_first_key_(include_first_key),
+//         shortening_mode_(shortening_mode) {
+//     // Making the default true will disable the feature for old versions
+//     seperator_is_key_plus_seq_ = (format_version <= 2);
+//   }
+
+//   virtual void OnKeyAdded(const Slice& key) override {
+//     Slice key_temp = Slice(key);
+//     Slice keypath;
+
+//     GetLengthPrefixedSlice(&key_temp, &keypath);
+//   }
+
+//   virtual void AddIndexEntry(std::string* last_key_in_current_block,
+//                              const Slice* first_key_in_next_block,
+//                              const BlockHandle& block_handle) override {
+//     if (first_key_in_next_block != nullptr) {
+//       if (shortening_mode_ !=
+//           BlockBasedTableOptions::IndexShorteningMode::kNoShortening) {
+//         FindShortestInternalKeySeparator(*comparator_->user_comparator(),
+//                                          last_key_in_current_block,
+//                                          *first_key_in_next_block);
+//       }
+//       if (!seperator_is_key_plus_seq_ &&
+//           comparator_->user_comparator()->Compare(
+//               ExtractUserKey(*last_key_in_current_block),
+//               ExtractUserKey(*first_key_in_next_block)) == 0) {
+//         seperator_is_key_plus_seq_ = true;
+//       }
+//     } else {
+//       if (shortening_mode_ == BlockBasedTableOptions::IndexShorteningMode::
+//                                   kShortenSeparatorsAndSuccessor) {
+//         FindShortInternalKeySuccessor(*comparator_->user_comparator(),
+//                                       last_key_in_current_block);
+//       }
+//     }
+//     auto sep = Slice(*last_key_in_current_block);
+
+//     assert(!include_first_key_ || !current_block_first_internal_key_.empty());
+//     IndexValue entry(block_handle, current_block_first_internal_key_);
+//     std::string encoded_entry;
+//     std::string delta_encoded_entry;
+//     entry.EncodeTo(&encoded_entry, include_first_key_, nullptr);
+//     if (use_value_delta_encoding_ && !last_encoded_handle_.IsNull()) {
+//       entry.EncodeTo(&delta_encoded_entry, include_first_key_,
+//                      &last_encoded_handle_);
+//     } else {
+//       // If it's the first block, or delta encoding is disabled,
+//       // BlockBuilder::Add() below won't use delta-encoded slice.
+//     }
+//     last_encoded_handle_ = block_handle;
+//     const Slice delta_encoded_entry_slice(delta_encoded_entry);
+//     index_block_builder_.Add(sep, encoded_entry, &delta_encoded_entry_slice);
+//     if (!seperator_is_key_plus_seq_) {
+//       index_block_builder_without_seq_.Add(ExtractUserKey(sep), encoded_entry,
+//                                            &delta_encoded_entry_slice);
+//     }
+
+//     current_block_first_internal_key_.clear();
+//   }
+
+//   using IndexBuilder::Finish;
+//   virtual Status Finish(
+//       IndexBlocks* index_blocks,
+//       const BlockHandle& /*last_partition_block_handle*/) override {
+//     if (seperator_is_key_plus_seq_) {
+//       index_blocks->index_block_contents = index_block_builder_.Finish();
+//     } else {
+//       index_blocks->index_block_contents =
+//           index_block_builder_without_seq_.Finish();
+//     }
+//     index_size_ = index_blocks->index_block_contents.size();
+//     return Status::OK();
+//   }
+
+//   virtual size_t IndexSize() const override { return index_size_; }
+
+//   virtual bool seperator_is_key_plus_seq() override {
+//     return seperator_is_key_plus_seq_;
+//   }
+
+//   // Changes *key to a short string >= *key.
+//   //
+//   static void FindShortestInternalKeySeparator(const Comparator& comparator,
+//                                                std::string* start,
+//                                                const Slice& limit);
+
+//   static void FindShortInternalKeySuccessor(const Comparator& comparator,
+//                                             std::string* key);
+
+//   friend class PartitionedIndexBuilder;
+
+//  private:
+//   BlockBuilder index_block_builder_;
+//   BlockBuilder index_block_builder_without_seq_;
+//   const bool use_value_delta_encoding_;
+//   bool seperator_is_key_plus_seq_;
+//   const bool include_first_key_;
+//   BlockBasedTableOptions::IndexShorteningMode shortening_mode_;
+//   BlockHandle last_encoded_handle_ = BlockHandle::NullBlockHandle();
+//   std::string current_block_first_internal_key_;
+//   Mbr enclosing_mbr_;
+// };
 }  // namespace ROCKSDB_NAMESPACE

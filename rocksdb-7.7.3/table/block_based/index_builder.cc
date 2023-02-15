@@ -61,6 +61,9 @@ IndexBuilder* IndexBuilder::CreateIndexBuilder(
           table_opt.index_shortening, /* include_first_key */ true);
       break;
     }
+    // case BlockBasedTableOptions::kRtreeSearch: {
+    //   return new RtreeIndexBuilder(comparator);
+    // }
     default: {
       assert(!"Do not recognize the index type ");
       break;

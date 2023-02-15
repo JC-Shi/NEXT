@@ -12,7 +12,9 @@
 #include "table/block_based/block.h"
 
 #include <algorithm>
+#include <iostream>
 #include <string>
+#include <typeinfo>
 #include <unordered_map>
 #include <vector>
 
@@ -138,8 +140,13 @@ struct DecodeEntryV4 {
   }
 };
 void DataBlockIter::NextImpl() {
+  // std::cout << "using NextImpl of DataBlockIter" << std::endl;
   bool is_shared = false;
-  ParseNextDataKey(&is_shared);
+  if (!is_spatial_) {
+    ParseNextDataKey(&is_shared);
+  } else {
+    ParseNextSpatialDataKey(&is_shared);
+  }
 }
 
 void MetaBlockIter::NextImpl() {
@@ -511,12 +518,18 @@ void MetaBlockIter::SeekForPrevImpl(const Slice& target) {
 }
 
 void DataBlockIter::SeekToFirstImpl() {
+  // std::cout << "using SeekToFirstImpl of DataBlockIter" << std::endl;
   if (data_ == nullptr) {  // Not init yet
     return;
   }
   SeekToRestartPoint(0);
   bool is_shared = false;
-  ParseNextDataKey(&is_shared);
+  if (!is_spatial_) {
+    ParseNextDataKey(&is_shared);
+  }
+  else {
+    ParseNextSpatialDataKey(&is_shared);
+  }
 }
 
 void MetaBlockIter::SeekToFirstImpl() {
@@ -647,6 +660,17 @@ bool DataBlockIter::ParseNextDataKey(bool* is_shared) {
   } else {
     return false;
   }
+}
+
+bool DataBlockIter::ParseNextSpatialDataKey(bool* is_shared) {
+  // std::cout << "calling ParseNextSpatialDataKey" << std::endl;
+  bool ret = false;
+  do {
+    ret = ParseNextDataKey(is_shared);
+    UpdateKey();
+    // std::cout << "parsed first key" << std::endl;
+  } while (Valid() && !IntersectMbr(key(), query_mbr_));
+  return ret;
 }
 
 bool IndexBlockIter::ParseNextIndexKey() {
@@ -1049,11 +1073,12 @@ MetaBlockIter* Block::NewMetaIterator(bool block_contents_pinned) {
   }
   return iter;
 }
-
+ 
 DataBlockIter* Block::NewDataIterator(const Comparator* raw_ucmp,
                                       SequenceNumber global_seqno,
                                       DataBlockIter* iter, Statistics* stats,
                                       bool block_contents_pinned) {
+  // std::cout << "created new data iterator" << std::endl;
   DataBlockIter* ret_iter;
   if (iter != nullptr) {
     ret_iter = iter;
@@ -1072,7 +1097,51 @@ DataBlockIter* Block::NewDataIterator(const Comparator* raw_ucmp,
     ret_iter->Initialize(
         raw_ucmp, data_, restart_offset_, num_restarts_, global_seqno,
         read_amp_bitmap_.get(), block_contents_pinned,
-        data_block_hash_index_.Valid() ? &data_block_hash_index_ : nullptr);
+        data_block_hash_index_.Valid() ? &data_block_hash_index_ : nullptr); 
+    if (read_amp_bitmap_) {
+      if (read_amp_bitmap_->GetStatistics() != stats) {
+        // DB changed the Statistics pointer, we need to notify read_amp_bitmap_
+        read_amp_bitmap_->SetStatistics(stats);
+      }
+    }
+  }
+
+  return ret_iter;
+}
+
+DataBlockIter* Block::NewSpatialDataIterator(const Comparator* raw_ucmp,
+                                      SequenceNumber global_seqno,
+                                      DataBlockIter* iter, Statistics* stats,
+                                      bool block_contents_pinned,
+                                      RtreeIteratorContext* context) {
+  // std::cout << "created new spatial data iterator" << std::endl;
+  DataBlockIter* ret_iter;
+  if (iter != nullptr) {
+    ret_iter = iter;
+  } else {
+    ret_iter = new DataBlockIter;
+  }
+  if (size_ < 2 * sizeof(uint32_t)) {
+    ret_iter->Invalidate(Status::Corruption("bad block contents"));
+    return ret_iter;
+  }
+  if (num_restarts_ == 0) {
+    // Empty block.
+    ret_iter->Invalidate(Status::OK());
+    return ret_iter;
+  } else {
+    if (context == nullptr) {
+      ret_iter->Initialize(
+          raw_ucmp, data_, restart_offset_, num_restarts_, global_seqno,
+          read_amp_bitmap_.get(), block_contents_pinned,
+          data_block_hash_index_.Valid() ? &data_block_hash_index_ : nullptr); 
+    } else {
+      ret_iter->Initialize(
+          raw_ucmp, data_, restart_offset_, num_restarts_, global_seqno,
+          read_amp_bitmap_.get(), block_contents_pinned,
+          data_block_hash_index_.Valid() ? &data_block_hash_index_ : nullptr, context->query_mbr); 
+    }
+
     if (read_amp_bitmap_) {
       if (read_amp_bitmap_->GetStatistics() != stats) {
         // DB changed the Statistics pointer, we need to notify read_amp_bitmap_
@@ -1126,6 +1195,163 @@ size_t Block::ApproximateMemoryUsage() const {
     usage += read_amp_bitmap_->ApproximateMemoryUsage();
   }
   return usage;
+}
+
+RtreeBlockIter* Block::NewRtreeIterator(const Comparator* raw_ucmp,
+                                        SequenceNumber global_seqno,
+                                        RtreeBlockIter* iter,
+                                        Statistics* stats,
+                                        bool block_contents_pinned,
+                                        RtreeIteratorContext* context) {
+  // std::cout << "creating new rtree iterator" << std::endl;
+  RtreeBlockIter* ret_iter;
+  if (iter != nullptr) {
+    ret_iter = iter;
+  } else {
+    ret_iter = new RtreeBlockIter;
+  }
+  if (size_ < 2 * sizeof(uint32_t)) {
+    ret_iter->Invalidate(Status::Corruption("bad block contents"));
+    return ret_iter;
+  }
+  if (num_restarts_ == 0) {
+    // Empty block.
+    ret_iter->Invalidate(Status::OK());
+    return ret_iter;
+  } else {
+    // std::cout << "start initializing RtreeBlockIter" << std::endl;
+    ret_iter->Initialize(
+        raw_ucmp, data_, restart_offset_, num_restarts_, global_seqno,
+        read_amp_bitmap_.get(), block_contents_pinned,
+        data_block_hash_index_.Valid() ? &data_block_hash_index_ : nullptr, context->query_mbr);
+    if (read_amp_bitmap_) {
+      if (read_amp_bitmap_->GetStatistics() != stats) {
+        // DB changed the Statistics pointer, we need to notify read_amp_bitmap_
+        read_amp_bitmap_->SetStatistics(stats);
+      }
+    }
+    // std::cout << "finished initializing RtreeBlockIter" << std::endl;
+  }
+
+  return ret_iter;  
+}
+
+void RtreeBlockIter::NextImpl() {
+  PrintType();
+  // std::cout << "using NextImpl of RtreeBlockIter" << std::endl;
+  assert(Valid());
+  ParseNextRtreeKey();
+}
+
+void RtreeBlockIter::SeekToFirstImpl() {
+  // std::cout << "using SeekToFirst of RtreeBlockIter" << std::endl;
+  if (data_ == nullptr) {  // Not init yet
+    return;
+  }
+  BlockIter::SeekToRestartPoint(0);
+  ParseNextRtreeKey();
+  // std::cout << "finished SeekToFirst of RtreeBlockIter" << std::endl;
+}
+
+// Calls the `ParseNextKey()` from `BlockIter`, but skips keys if an Mbb is
+// given and it doesn't intersect
+bool RtreeBlockIter::ParseNextRtreeKey() {
+  bool is_shared = false;
+  bool ret = false;
+  do {
+    ret = ParseNextDataKey(&is_shared);
+    // std::cout << key().data() << std::endl;
+  } while (Valid() && !IntersectMbr(key(), query_mbr_));
+  return ret;
+}
+
+bool DataBlockIter::IntersectMbr(
+    const Slice& aa_orig,
+    Mbr bb) {
+  // If the query bounding box is empty, return true, which corresponds to a
+    // full table scan
+    if (bb.empty()) {
+      return true;
+    }
+
+    // Make a mutable copy of the slice
+    Slice aa = Slice(aa_orig);
+    // std::cout << "key: " << aa.data() << std::endl;
+
+    uint64_t aa_iid = *reinterpret_cast<const uint64_t*>(aa.data());
+
+    // std::cout << aa_iid << " " << bb.iid.max << " " << bb.iid.min << std::endl;
+
+    // If the bounding boxes don't intersect in one dimension, they won't
+    // intersect at all, hence we can return early
+    if (aa_iid > bb.iid.max || bb.iid.min > aa_iid) {
+      return false;
+    }
+
+    double aa_min;
+    double aa_max;
+
+    aa_min = *reinterpret_cast<const double*>(aa.data() + 8);
+    aa_max = *reinterpret_cast<const double*>(aa.data() + 16);
+    if (aa_min > bb.first.max || bb.first.min > aa_max) {
+      return false;
+    }
+
+    aa_min = *reinterpret_cast<const double*>(aa.data() + 24);
+    aa_max = *reinterpret_cast<const double*>(aa.data() + 32);
+    if (aa_min > bb.second.max || bb.second.min > aa_max) {
+      return false;
+    }
+    return true;
+}
+
+bool RtreeBlockIter::IntersectMbr(
+    const Slice& aa_orig,
+    Mbr bb) {
+  /// If the query bounding box is empty, return true, which corresponds to a
+  // full table scan
+  if (bb.empty()) {
+    return true;
+  }
+
+  // Make a mutable copy of the slice
+  Slice aa = Slice(aa_orig);
+
+  // // The key consists of the Keypath, the Internal Id and two more dimensions
+  // Slice ignore;
+  // GetLengthPrefixedSlice(&aa, &ignore);
+
+  uint64_t aa_iid = *reinterpret_cast<const uint64_t*>(aa.data());
+
+  // If the bounding boxes don't intersect in one dimension, they won't
+  // intersect at all, hence we can return early
+  if (aa_iid > bb.iid.max || bb.iid.min > aa_iid) {
+    return false;
+  }
+
+  double aa_min;
+  double aa_max;
+
+  aa_min = *reinterpret_cast<const double*>(aa.data() + 8);
+  aa_max = *reinterpret_cast<const double*>(aa.data() + 16);
+  if (aa_min > bb.first.max || bb.first.min > aa_max) {
+    return false;
+  }
+
+  aa_min = *reinterpret_cast<const double*>(aa.data() + 24);
+  aa_max = *reinterpret_cast<const double*>(aa.data() + 32);
+  if (aa_min > bb.second.max || bb.second.min > aa_max) {
+    return false;
+  }
+  return true;
+}
+
+void DataBlockIter::PrintType(){
+  std::cout << "this is a DataBlockIter" << std::endl;
+}
+
+void RtreeBlockIter::PrintType(){
+  std::cout << "this is a RtreeBlockIter" << std::endl;
 }
 
 }  // namespace ROCKSDB_NAMESPACE

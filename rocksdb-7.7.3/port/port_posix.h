@@ -88,7 +88,7 @@ namespace ROCKSDB_NAMESPACE {
 extern const bool kDefaultToAdaptiveMutex;
 
 namespace port {
-constexpr bool kLittleEndian = PLATFORM_IS_LITTLE_ENDIAN;
+static const bool kLittleEndian = PLATFORM_IS_LITTLE_ENDIAN;
 #undef PLATFORM_IS_LITTLE_ENDIAN
 
 class CondVar;
