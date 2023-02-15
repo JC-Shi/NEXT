@@ -551,10 +551,7 @@ class DataBlockIter : public BlockIter<Slice> {
     read_amp_bitmap_ = read_amp_bitmap;
     last_bitmap_offset_ = current_ + 1;
     data_block_hash_index_ = data_block_hash_index;
-    // The query contains also the keypath, remove it first
-    Slice ignore;
     Slice query_slice(query);
-    GetLengthPrefixedSlice(&query_slice, &ignore);
     query_mbr_ = ReadQueryMbr(query_slice);
     is_spatial_ = true;
     // std::cout << "query_mbr_: " << query_mbr_ << std::endl;

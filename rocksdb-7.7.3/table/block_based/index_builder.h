@@ -456,189 +456,121 @@ class PartitionedIndexBuilder : public IndexBuilder {
 
 // class RtreeIndexBuilder : public IndexBuilder {
 //  public:
-//   explicit RtreeIndexBuilder(const InternalKeyComparator* comparator)
+//   explicit RtreeIndexBuilder(
+//       const InternalKeyComparator* comparator,
+//       const int index_block_restart_interval, const uint32_t format_version,
+//       const bool use_value_delta_encoding,
+//       BlockBasedTableOptions::IndexShorteningMode shortening_mode,
+//       bool include_first_key)
 //       : IndexBuilder(comparator),
-//       prev_keypath_(""),
-//       last_block_builder_(1) {}
+//         index_block_builder_(index_block_restart_interval,
+//                              true /*use_delta_encoding*/,
+//                              use_value_delta_encoding),
+//         index_block_builder_without_seq_(index_block_restart_interval,
+//                                          true /*use_delta_encoding*/,
+//                                          use_value_delta_encoding),
+//         use_value_delta_encoding_(use_value_delta_encoding),
+//         include_first_key_(include_first_key),
+//         shortening_mode_(shortening_mode) {
+//     // Making the default true will disable the feature for old versions
+//     seperator_is_key_plus_seq_ = (format_version <= 2);
+//   }
 
-//   // Get the enclosing MBB from this block and use it as key
+//   virtual void OnKeyAdded(const Slice& key) override {
+//     Slice key_temp = Slice(key);
+//     Slice keypath;
+
+//     GetLengthPrefixedSlice(&key_temp, &keypath);
+//   }
+
 //   virtual void AddIndexEntry(std::string* last_key_in_current_block,
 //                              const Slice* first_key_in_next_block,
 //                              const BlockHandle& block_handle) override {
-//     (void) first_key_in_next_block;
-//     Slice key = Slice(*last_key_in_current_block);
-//     Slice keypath;
+//     if (first_key_in_next_block != nullptr) {
+//       if (shortening_mode_ !=
+//           BlockBasedTableOptions::IndexShorteningMode::kNoShortening) {
+//         FindShortestInternalKeySeparator(*comparator_->user_comparator(),
+//                                          last_key_in_current_block,
+//                                          *first_key_in_next_block);
+//       }
+//       if (!seperator_is_key_plus_seq_ &&
+//           comparator_->user_comparator()->Compare(
+//               ExtractUserKey(*last_key_in_current_block),
+//               ExtractUserKey(*first_key_in_next_block)) == 0) {
+//         seperator_is_key_plus_seq_ = true;
+//       }
+//     } else {
+//       if (shortening_mode_ == BlockBasedTableOptions::IndexShorteningMode::
+//                                   kShortenSeparatorsAndSuccessor) {
+//         FindShortInternalKeySuccessor(*comparator_->user_comparator(),
+//                                       last_key_in_current_block);
+//       }
+//     }
+//     auto sep = Slice(*last_key_in_current_block);
 
-//     // The key consists of the Keypath, and several intervals. The first
-//     // interval is the Internal Id, all others are the other dimensions.
-//     GetLengthPrefixedSlice(&key, &keypath);
-
-//     // First call, there wasn't any keypath yet
-//     if (prev_keypath_.empty()) {
-//       prev_keypath_ = std::string(keypath.data(), keypath.size());
+//     assert(!include_first_key_ || !current_block_first_internal_key_.empty());
+//     IndexValue entry(block_handle, current_block_first_internal_key_);
+//     std::string encoded_entry;
+//     std::string delta_encoded_entry;
+//     entry.EncodeTo(&encoded_entry, include_first_key_, nullptr);
+//     if (use_value_delta_encoding_ && !last_encoded_handle_.IsNull()) {
+//       entry.EncodeTo(&delta_encoded_entry, include_first_key_,
+//                      &last_encoded_handle_);
+//     } else {
+//       // If it's the first block, or delta encoding is disabled,
+//       // BlockBuilder::Add() below won't use delta-encoded slice.
+//     }
+//     last_encoded_handle_ = block_handle;
+//     const Slice delta_encoded_entry_slice(delta_encoded_entry);
+//     index_block_builder_.Add(sep, encoded_entry, &delta_encoded_entry_slice);
+//     if (!seperator_is_key_plus_seq_) {
+//       index_block_builder_without_seq_.Add(ExtractUserKey(sep), encoded_entry,
+//                                            &delta_encoded_entry_slice);
 //     }
 
-//     // A new keypath, hence a new index block
-//     if (keypath.compare(Slice(prev_keypath_)) != 0) {
-//       flush_rtree();
-//       prev_keypath_ = std::string(keypath.data(), keypath.size());
-//     }
-
-//     // Encode the block handle and construct leaf node
-//     std::string handle_encoding;
-//     block_handle.EncodeTo(&handle_encoding);
-//     LeafNode leaf_node = LeafNode{enclosing_mbb_, handle_encoding};
-//     leaf_nodes_.push_back(leaf_node);
-
-//     enclosing_mbb_.clear();
+//     current_block_first_internal_key_.clear();
 //   }
-
-//   // Calculate the enclosing MBB for each block
-//   virtual void OnKeyAdded(const Slice& const_key) override {
-//     Slice key = ExtractUserKey(const_key);
-//     Slice keypath;
-
-//     // The key consists of the Keypath, and several intervals. The first
-//     // interval is the Internal Id, all others are the other dimensions.
-//     GetLengthPrefixedSlice(&key, &keypath);
-
-//     std::vector<Interval> mbb = ReadMbb(key);
-//     expand_mbb(enclosing_mbb_, mbb);
-//   }
-
 
 //   using IndexBuilder::Finish;
 //   virtual Status Finish(
 //       IndexBlocks* index_blocks,
-//       const BlockHandle& last_partition_block_handle) override {
-//     // `Finish` is called for *every* index block in case your index
-//     // returns several ones. It only needs to return `Status::Incomplete()`
-//     // if there are more blocks to finish. Once the you are at the final
-//     // block, return `Status::OK()`.
-
-//     // There might still be points which aren't built up to a R-tree yet
-//     if (!leaf_nodes_.empty()) {
-//       flush_rtree();
-//       prev_keypath_ = std::string();
+//       const BlockHandle& /*last_partition_block_handle*/) override {
+//     if (seperator_is_key_plus_seq_) {
+//       index_blocks->index_block_contents = index_block_builder_.Finish();
+//     } else {
+//       index_blocks->index_block_contents =
+//           index_block_builder_without_seq_.Finish();
 //     }
-
-//     assert(!entries_.empty());
-
-//     // Index blocks are currently stored on disk. Store the pointers to
-//     // them in the last index block.
-//     if (finishing_indexes_ == true) {
-//       Entry& last_entry = entries_.front();
-//       std::string handle_encoding;
-//       last_partition_block_handle.EncodeTo(&handle_encoding);
-//       last_block_builder_.Add(last_entry.keypath, handle_encoding);
-//       entries_.pop_front();
-//     }
-
-//     // All index blocks are stored, store the last one
-//     if (entries_.empty()) {
-//       index_blocks->index_block_contents = last_block_builder_.Finish();
-//       return Status::OK();
-//     }
-//     // There are still blocks that need to be stored
-//     else {
-//       Entry &entry = entries_.front();
-//       std::string handle_encoding;
-//       index_blocks->index_block_contents = Slice(
-//           reinterpret_cast<const char *>(entry.rtree->data()),
-//           entry.rtree->size());
-//       finishing_indexes_ = true;
-//       return Status::Incomplete();
-//     }
+//     index_size_ = index_blocks->index_block_contents.size();
+//     return Status::OK();
 //   }
 
-//   // virtual size_t EstimatedSize() const override {
-//   //   size_t total = 0;
-//   //   // The index blocks so far processed
-//   //   for (auto& entry: entries_) {
-//   //     total += entry.rtree->size();
-//   //   }
-//   //   // The current index block
-//   //   // TODO vmx 2017-06-07: Get correct size instead of guessing "48"
-//   //   total += leaf_nodes_.size() * 48;
-//   //   return total;
-//   // }
+//   virtual size_t IndexSize() const override { return index_size_; }
+
+//   virtual bool seperator_is_key_plus_seq() override {
+//     return seperator_is_key_plus_seq_;
+//   }
+
+//   // Changes *key to a short string >= *key.
+//   //
+//   static void FindShortestInternalKeySeparator(const Comparator& comparator,
+//                                                std::string* start,
+//                                                const Slice& limit);
+
+//   static void FindShortInternalKeySuccessor(const Comparator& comparator,
+//                                             std::string* key);
 
 //   friend class PartitionedIndexBuilder;
 
 //  private:
-//   // The lowest level of the R-tree has the MBB of the block and the block
-//   // handle pointing to that block.
-//   struct LeafNode {
-//     std::vector<Interval> mbb;
-//     std::string encoded_block_handle;
-//   };
-//   // The current enclosing Mbb of the current leaf node
-//   std::vector<Interval> enclosing_mbb_;
-//   // The keypath of the previous key. If it is different, create a new R-tree
-//   std::string prev_keypath_;
-//   // The MBBs that are the lowest level of the R-tree
-//   std::vector<LeafNode> leaf_nodes_;
-//   // And entry consists of the keypath and its Priority Search Tree
-//   struct Entry {
-//     std::string keypath;
-//     std::unique_ptr<std::string> rtree;
-//   };
-//   // List of Priority Search Trees and their keys
-//   std::list<Entry> entries_;
-//   // The last index block that contains pointers to the other blocks
-//   //std::string last_block_;
-//   BlockBuilder last_block_builder_;
-
-//   // true if Finish is called once but not complete yet.
-//   bool finishing_indexes_ = false;
-
-//   // Expands the the first Mbb if the second one is bigger
-//   void expand_mbb(std::vector<Interval>& to_expand,
-//                   std::vector<Interval> expander) {
-//     if (to_expand.empty()) {
-//       to_expand = expander;
-//     } else {
-//       assert(to_expand.size() == expander.size());
-//       for (size_t ii = 0; ii < to_expand.size(); ii++) {
-//         if (expander[ii].min < to_expand[ii].min) {
-//           to_expand[ii].min = expander[ii].min;
-//         }
-//         if (expander[ii].max > to_expand[ii].max) {
-//           to_expand[ii].max = expander[ii].max;
-//         }
-//       }
-//     }
-//   }
-
-//   std::string serialize_mbb(const std::vector<Interval>& mbb) {
-//     std::string serialized;
-//     for (auto& interval: mbb) {
-//       serialized.append(reinterpret_cast<const char*>(&interval.min),
-//                         sizeof(double));
-//       serialized.append(reinterpret_cast<const char*>(&interval.max),
-//                         sizeof(double));
-//     }
-//     return serialized;
-//   }
-//   std::string* serialize_leaf_nodes(const std::vector<LeafNode>& leaf_nodes) {
-//     // The unique pointer that wraps the leaf_nodes will free the memory
-//     std::string* serialized = new std::string();
-//     for (auto& leaf_node: leaf_nodes) {
-//       std::string serialized_mbb = serialize_mbb(leaf_node.mbb);
-//       serialized->append(serialized_mbb);
-//       serialized->append(leaf_node.encoded_block_handle);
-//     }
-//     return serialized;
-//   }
-
-//   // Build an R-tree out of the current data and put it into the list of trees
-//   void flush_rtree() {
-//     std::string* leaf_nodes = serialize_leaf_nodes(leaf_nodes_);
-//     // TODO vmx 2017-06-07: Build up the actual R-tree
-//     entries_.push_back(
-//         {prev_keypath_,
-//          std::unique_ptr<std::string>(leaf_nodes)});
-//     leaf_nodes_.clear();
-//   }
+//   BlockBuilder index_block_builder_;
+//   BlockBuilder index_block_builder_without_seq_;
+//   const bool use_value_delta_encoding_;
+//   bool seperator_is_key_plus_seq_;
+//   const bool include_first_key_;
+//   BlockBasedTableOptions::IndexShorteningMode shortening_mode_;
+//   BlockHandle last_encoded_handle_ = BlockHandle::NullBlockHandle();
+//   std::string current_block_first_internal_key_;
+//   Mbr enclosing_mbr_;
 // };
 }  // namespace ROCKSDB_NAMESPACE

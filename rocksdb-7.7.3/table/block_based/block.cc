@@ -1278,11 +1278,9 @@ bool DataBlockIter::IntersectMbr(
     Slice aa = Slice(aa_orig);
     // std::cout << "key: " << aa.data() << std::endl;
 
-    // The key consists of the Keypath, the Internal Id and two more dimensions
-    Slice ignore = Slice();
-    GetLengthPrefixedSlice(&aa, &ignore);
-
     uint64_t aa_iid = *reinterpret_cast<const uint64_t*>(aa.data());
+
+    // std::cout << aa_iid << " " << bb.iid.max << " " << bb.iid.min << std::endl;
 
     // If the bounding boxes don't intersect in one dimension, they won't
     // intersect at all, hence we can return early
@@ -1319,9 +1317,9 @@ bool RtreeBlockIter::IntersectMbr(
   // Make a mutable copy of the slice
   Slice aa = Slice(aa_orig);
 
-  // The key consists of the Keypath, the Internal Id and two more dimensions
-  Slice ignore;
-  GetLengthPrefixedSlice(&aa, &ignore);
+  // // The key consists of the Keypath, the Internal Id and two more dimensions
+  // Slice ignore;
+  // GetLengthPrefixedSlice(&aa, &ignore);
 
   uint64_t aa_iid = *reinterpret_cast<const uint64_t*>(aa.data());
 
