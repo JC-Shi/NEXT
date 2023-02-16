@@ -118,7 +118,7 @@ int main() {
 
     BlockBasedTableOptions block_based_options;
 
-//    block_based_options.index_type = BlockBasedTableOptions::kRtreeSearch;
+   block_based_options.index_type = BlockBasedTableOptions::kRtreeSearch;
 //    block_based_options.flush_block_policy_factory.reset(
 //            new NoiseFlushBlockPolicyFactory());
     options.table_factory.reset(NewBlockBasedTableFactory(block_based_options));
@@ -133,6 +133,7 @@ int main() {
     if (!s.ok()) {
         options.create_if_missing = true;
         s = DB::Open(options, kDBPath, &db);
+        std::cout << s.code() << " " << s.subcode() << std::endl;
         assert(s.ok());
 
         std::string key1 = serialize_key(516, 22.214);

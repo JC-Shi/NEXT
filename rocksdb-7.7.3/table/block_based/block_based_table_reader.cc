@@ -2648,6 +2648,7 @@ Status BlockBasedTable::CreateIndexReader(
     InternalIterator* meta_iter, bool use_cache, bool prefetch, bool pin,
     BlockCacheLookupContext* lookup_context,
     std::unique_ptr<IndexReader>* index_reader) {
+  std::cout << "start CreateIndexReader" << std::endl;
   switch (rep_->index_type) {
     case BlockBasedTableOptions::kTwoLevelIndexSearch: {
       return PartitionIndexReader::Create(this, ro, prefetch_buffer, use_cache,
@@ -2675,10 +2676,13 @@ Status BlockBasedTable::CreateIndexReader(
                                        index_reader);
       }
     }
-    // case BlockBasedTableOptions::kRtreeSearch: {
-    //   return RtreeIndexReader::Create(this, ro, prefetch_buffer, use_cache,
-    //                                   prefetch, pin, lookup_context, index_reader);
-    // }
+    case BlockBasedTableOptions::kRtreeSearch: {
+      // return RtreeIndexReader::Create(this, ro, prefetch_buffer, use_cache,
+      //                                 prefetch, pin, lookup_context, index_reader);
+      return BinarySearchIndexReader::Create(this, ro, prefetch_buffer,
+                                             use_cache, prefetch, pin,
+                                             lookup_context, index_reader);
+    }
     default: {
       std::string error_message =
           "Unrecognized index type: " + std::to_string(rep_->index_type);
