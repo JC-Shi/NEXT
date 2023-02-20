@@ -136,14 +136,14 @@ int main() {
         assert(s.ok());
 
         std::string key1 = serialize_key(516, 22.214);
-        std::cout << "key1: " << key1 << std::endl;
+        // std::cout << "key1: " << key1 << std::endl;
 
         // Put key-value
         s = db->Put(WriteOptions(), key1, "");
         assert(s.ok());
 
         std::string key2 = serialize_key(1124, 4.1432);
-        std::cout << "key2: " << key2 << std::endl;
+        // std::cout << "key2: " << key2 << std::endl;
         s = db->Put(WriteOptions(), key2, "");
         assert(s.ok());
     }
