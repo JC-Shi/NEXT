@@ -119,6 +119,7 @@ int main() {
     BlockBasedTableOptions block_based_options;
 
    block_based_options.index_type = BlockBasedTableOptions::kRtreeSearch;
+//    block_based_options.index_type = BlockBasedTableOptions::kTwoLevelIndexSearch;
 //    block_based_options.flush_block_policy_factory.reset(
 //            new NoiseFlushBlockPolicyFactory());
     options.table_factory.reset(NewBlockBasedTableFactory(block_based_options));
@@ -127,6 +128,7 @@ int main() {
 
     Status s;
     s = DB::Open(options, kDBPath, &db);
+    std::cout << "finished open db" << std::endl;
 
     // Failed to open, probably it doesn't exist yet. Try to create it and
     // insert data

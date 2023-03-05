@@ -295,6 +295,8 @@ class BlockBasedTable : public TableReader {
 
   friend class PartitionIndexReader;
 
+  friend class RtreeIndexReader;
+
   friend class UncompressionDictReader;
 
  protected:

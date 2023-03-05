@@ -18,27 +18,28 @@
 
 using namespace rocksdb;
 
-std::string serialize_key(uint64_t iid, double xValue, double yValue) {
+std::string serialize_key(uint64_t iid, double x_value, double y_value) {
     std::string key;
     // The R-tree stores boxes, hence duplicate the input values
     key.append(reinterpret_cast<const char*>(&iid), sizeof(uint64_t));
-    key.append(reinterpret_cast<const char*>(&xValue), sizeof(double));
-    key.append(reinterpret_cast<const char*>(&xValue), sizeof(double));
-    key.append(reinterpret_cast<const char*>(&yValue), sizeof(double));
-    key.append(reinterpret_cast<const char*>(&yValue), sizeof(double));
+    key.append(reinterpret_cast<const char*>(&x_value), sizeof(double));
+    key.append(reinterpret_cast<const char*>(&x_value), sizeof(double));
+    key.append(reinterpret_cast<const char*>(&y_value), sizeof(double));
+    key.append(reinterpret_cast<const char*>(&y_value), sizeof(double));
     return key;
 }
 
 std::string serialize_query(uint64_t iid_min,
-                            uint64_t iid_max, double value_min,
-                            double value_max) {
+                            uint64_t iid_max, double x_value_min,
+                            double x_value_max, double y_value_min,
+                            double y_value_max) {
     std::string key;
     key.append(reinterpret_cast<const char*>(&iid_min), sizeof(uint64_t));
     key.append(reinterpret_cast<const char*>(&iid_max), sizeof(uint64_t));
-    key.append(reinterpret_cast<const char*>(&value_min), sizeof(double));
-    key.append(reinterpret_cast<const char*>(&value_max), sizeof(double));
-    key.append(reinterpret_cast<const char*>(&value_min), sizeof(double));
-    key.append(reinterpret_cast<const char*>(&value_max), sizeof(double));
+    key.append(reinterpret_cast<const char*>(&x_value_min), sizeof(double));
+    key.append(reinterpret_cast<const char*>(&x_value_max), sizeof(double));
+    key.append(reinterpret_cast<const char*>(&y_value_min), sizeof(double));
+    key.append(reinterpret_cast<const char*>(&y_value_max), sizeof(double));
     return key;
 }
 
@@ -97,9 +98,9 @@ public:
 
 int main(int argc, char* argv[]) {
     std::string kDBPath = argv[1];
-    int dataSize = int(atoi(argv[2]));
-    std::ifstream dataFile(argv[3]);
-    std::cout << "data size: " << dataSize << std::endl;
+    int querySize = int(atoi(argv[2]));
+    std::ifstream queryFile(argv[3]);
+    std::cout << "query size: " << querySize << std::endl;
 
     DB* db;
     Options options;
@@ -111,7 +112,8 @@ int main(int argc, char* argv[]) {
 
     // Set the block cache to 64 MB
     block_based_options.block_cache = rocksdb::NewLRUCache(64 * 1024 * 1024);
-   block_based_options.index_type = BlockBasedTableOptions::kRtreeSearch;
+
+//    block_based_options.index_type = BlockBasedTableOptions::kRtreeSearch;
 //    block_based_options.flush_block_policy_factory.reset(
 //            new NoiseFlushBlockPolicyFactory());
     options.table_factory.reset(NewBlockBasedTableFactory(block_based_options));
@@ -120,6 +122,7 @@ int main(int argc, char* argv[]) {
     // Set the write buffer size to 64 MB
     options.write_buffer_size = 64 * 1024 * 1024;
 
+
     Status s;
     s = DB::Open(options, kDBPath, &db);
 
@@ -127,46 +130,38 @@ int main(int argc, char* argv[]) {
     uint32_t op;
     double low[2], high[2];
 
-    // Failed to open, probably it doesn't exist yet. Try to create it and
-    // insert data
-    if (!s.ok()) {
-        options.create_if_missing = true;
-        s = DB::Open(options, kDBPath, &db);
-        assert(s.ok());
+    std::string value;
 
-        std::cout << "start writing data" << std::endl;
-        // auto totalDuration = std::chrono::duration<long long, std::milli>(0);
-        std::chrono::nanoseconds totalDuration{0};
-        for (int i = 0; i < dataSize; i++){
-            dataFile >> op >> id >> low[0] >> low[1] >> high[0] >> high[1];
-            // if (i == 0) {
-            //     std::cout << op << id << low[0] << low[1] << high[0] << high[1];
-            // }
-            std::string key = serialize_key(id, low[0], low[1]);
+    // Specify the desired bounding box on the iterator
+    rocksdb::ReadOptions read_options;
+    rocksdb::RtreeIteratorContext iterator_context;
 
-            // Put key-value
-            auto start = std::chrono::high_resolution_clock::now();
-            s = db->Put(WriteOptions(), key, "");
-            auto end = std::chrono::high_resolution_clock::now(); 
-            auto duration = std::chrono::duration_cast<std::chrono::nanoseconds>(end - start);
-            totalDuration = totalDuration + duration;
+    // This scope is needed so that the unique pointer of the iterator runs
+    // out of scope and cleans up things correctly
+    std::chrono::nanoseconds totalDuration{0};
+    for (int i = 0; i < querySize; i++) {
+        queryFile >> op >> id >> low[0] >> low[1] >> high[0] >> high[1];
+        // if (i == 0) {
+        //     std::cout << op << id << low[0] << low[1] << high[0] << high[1];
+        // }
+        auto start = std::chrono::high_resolution_clock::now();
+        iterator_context.query_mbr =
+                serialize_query(0, 10000000, low[0], high[0], low[1], high[1]);
+        read_options.iterator_context = &iterator_context;
+        std::unique_ptr <rocksdb::Iterator> it(db->NewIterator(read_options));
+
+        int counter = 0;
+        // Iterate over the results and print the value
+        for (it->SeekToFirst(); it->Valid(); it->Next()) {
+            Key key = deserialize_key(it->key());
+            counter++;
         }
-        assert(s.ok());
-        std::cout << "end writing data" << std::endl;
-        std::cout << "Execution time: " << totalDuration.count() << " nanoseconds" << std::endl;
-
-        // std::string key1 = serialize_key(keypath, 516, 22.214);
-        // std::cout << "key1: " << key1 << std::endl;
-
-        // // Put key-value
-        // s = db->Put(WriteOptions(), key1, "");
-        // assert(s.ok());
-
-        // std::string key2 = serialize_key(keypath, 1124, 4.1432);
-        // std::cout << "key2: " << key2 << std::endl;
-        // s = db->Put(WriteOptions(), key2, "");
-        // assert(s.ok());
+        auto end = std::chrono::high_resolution_clock::now(); 
+        auto duration = std::chrono::duration_cast<std::chrono::nanoseconds>(end - start);
+        totalDuration = totalDuration + duration;
+        std::cout << "Total number of results: " << counter << std::endl;
     }
+    std::cout << "Execution time: " << totalDuration.count() << " nanoseconds" << std::endl;
 
     delete db;
 

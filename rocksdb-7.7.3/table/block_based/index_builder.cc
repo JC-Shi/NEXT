@@ -18,8 +18,10 @@
 #include "db/dbformat.h"
 #include "rocksdb/comparator.h"
 #include "rocksdb/flush_block_policy.h"
+#include "table/block_based/block_based_table_factory.h"
 #include "table/block_based/partitioned_filter_block.h"
 #include "table/format.h"
+#include "util/rtree.h"
 
 namespace ROCKSDB_NAMESPACE {
 
@@ -62,10 +64,15 @@ IndexBuilder* IndexBuilder::CreateIndexBuilder(
       break;
     }
     case BlockBasedTableOptions::kRtreeSearch: {
-      result =  new RtreeIndexBuilder(
-          comparator, table_opt.index_block_restart_interval,
-          table_opt.format_version, use_value_delta_encoding,
-          table_opt.index_shortening, /* include_first_key */ false);
+      // result = new RtreeIndexLevelBuilder(
+      //     comparator, table_opt.index_block_restart_interval,
+      //     table_opt.format_version, use_value_delta_encoding,
+      //     table_opt.index_shortening, /* include_first_key */ false);
+      result = RtreeIndexBuilder::CreateIndexBuilder(
+          comparator, use_value_delta_encoding, table_opt);
+      // result = PartitionedIndexBuilder::CreateIndexBuilder(
+      //     comparator, use_value_delta_encoding, table_opt);
+      break;
     }
     default: {
       assert(!"Do not recognize the index type ");
@@ -285,4 +292,243 @@ Status PartitionedIndexBuilder::Finish(
 }
 
 size_t PartitionedIndexBuilder::NumPartitions() const { return partition_cnt_; }
+
+
+RtreeIndexBuilder* RtreeIndexBuilder::CreateIndexBuilder(
+    const InternalKeyComparator* comparator,
+    const bool use_value_delta_encoding,
+    const BlockBasedTableOptions& table_opt) {
+  return new RtreeIndexBuilder(comparator, table_opt,
+                                     use_value_delta_encoding);
+}
+
+RtreeIndexBuilder::RtreeIndexBuilder(
+    const InternalKeyComparator* comparator,
+    const BlockBasedTableOptions& table_opt,
+    const bool use_value_delta_encoding)
+    : IndexBuilder(comparator),
+      index_block_builder_(table_opt.index_block_restart_interval,
+                           true /*use_delta_encoding*/,
+                           use_value_delta_encoding),
+      sub_index_builder_(nullptr),
+      table_opt_(table_opt),
+      use_value_delta_encoding_(use_value_delta_encoding),
+      rtree_level_(1) {}
+
+RtreeIndexBuilder::~RtreeIndexBuilder() {
+  delete sub_index_builder_;
+}
+
+void RtreeIndexBuilder::MakeNewSubIndexBuilder() {
+  assert(sub_index_builder_ == nullptr);
+  sub_index_builder_ = new RtreeIndexLevelBuilder(
+      comparator_, table_opt_.index_block_restart_interval,
+      table_opt_.format_version, use_value_delta_encoding_,
+      table_opt_.index_shortening, /* include_first_key */ false);
+
+  flush_policy_.reset(FlushBlockBySizePolicyFactory::NewFlushBlockPolicy(
+      table_opt_.metadata_block_size, table_opt_.block_size_deviation,
+      sub_index_builder_->index_block_builder_));
+  partition_cut_requested_ = false;
+}
+
+void RtreeIndexBuilder::RequestPartitionCut() {
+  partition_cut_requested_ = true;
+}
+
+void RtreeIndexBuilder::OnKeyAdded(const Slice& key){
+    Slice key_temp = Slice(key);
+    Mbr mbr = ReadKeyMbr(key_temp);
+    expandMbr(sub_index_enclosing_mbr_, mbr);
+    // std::cout << "sub_index_enclosing_mbr_ after expansion: " << sub_index_enclosing_mbr_ << std::endl;
+  }
+
+void RtreeIndexBuilder::AddIndexEntry(
+    std::string* last_key_in_current_block,
+    const Slice* first_key_in_next_block, const BlockHandle& block_handle) {
+  expandMbr(enclosing_mbr_, sub_index_enclosing_mbr_);
+  // std::cout << "enclosing_mbr_: " << enclosing_mbr_ << std::endl;
+  // Note: to avoid two consecuitive flush in the same method call, we do not
+  // check flush policy when adding the last key
+  if (UNLIKELY(first_key_in_next_block == nullptr)) {  // no more keys
+    if (sub_index_builder_ == nullptr) {
+      MakeNewSubIndexBuilder();
+    }
+    sub_index_builder_->AddIndexEntry(block_handle, serializeMbr(sub_index_enclosing_mbr_));
+
+    sub_index_last_key_ = std::string(*last_key_in_current_block);
+    // std::cout << "push_back the last sub_index builder" << std::endl;
+    entries_.push_back(
+        {serializeMbr(enclosing_mbr_),
+         std::unique_ptr<RtreeIndexLevelBuilder>(sub_index_builder_)});
+    enclosing_mbr_.clear();
+    sub_index_builder_ = nullptr;
+    cut_filter_block = true;
+  } else {
+    // apply flush policy only to non-empty sub_index_builder_
+    if (sub_index_builder_ != nullptr) {
+      std::string handle_encoding;
+      block_handle.EncodeTo(&handle_encoding);
+      bool do_flush =
+          partition_cut_requested_ ||
+          flush_policy_->Update(*last_key_in_current_block, handle_encoding);
+      if (do_flush) {
+        // std::cout << "push_back a full sub_index builder" << std::endl;
+        entries_.push_back(
+            {serializeMbr(enclosing_mbr_),
+             std::unique_ptr<RtreeIndexLevelBuilder>(sub_index_builder_)});
+        enclosing_mbr_.clear();
+        sub_index_builder_ = nullptr;
+      }
+    }
+    if (sub_index_builder_ == nullptr) {
+      MakeNewSubIndexBuilder();
+    }
+    sub_index_builder_->AddIndexEntry(block_handle, serializeMbr(sub_index_enclosing_mbr_));
+    sub_index_last_key_ = std::string(*last_key_in_current_block);
+
+  }
+  sub_index_enclosing_mbr_.clear();
+}
+
+Status RtreeIndexBuilder::Finish(
+    IndexBlocks* index_blocks, const BlockHandle& last_partition_block_handle) {
+  // std::cout << "RtreeIndexBuilder Finish" << std::endl;
+  // std::cout << "entries_ size: " << entries_.size() << std::endl;
+  if (partition_cnt_ == 0) {
+    partition_cnt_ = entries_.size();
+  }
+  // It must be set to null after last key is added
+  // assert(sub_index_builder_ == nullptr);
+  if (finishing_indexes == true) {
+    Entry& last_entry = entries_.front();
+    // std::string handle_encoding;
+    // last_partition_block_handle.EncodeTo(&handle_encoding);
+    // std::string handle_delta_encoding;
+    // PutVarsignedint64(
+    //     &handle_delta_encoding,
+    //     last_partition_block_handle.size() - last_encoded_handle_.size());
+    // last_encoded_handle_ = last_partition_block_handle;
+    // const Slice handle_delta_encoding_slice(handle_delta_encoding);
+    // // std::cout << "add index entry into top level index: " << ReadQueryMbr(last_entry.key) << std::endl;
+    // index_block_builder_.Add(last_entry.key, handle_encoding,
+    //                          &handle_delta_encoding_slice);
+
+    // add entry to the next_sub_index_builder
+    if (sub_index_builder_ != nullptr) {
+      std::string handle_encoding;
+      last_partition_block_handle.EncodeTo(&handle_encoding);
+      bool do_flush =
+          partition_cut_requested_ ||
+          flush_policy_->Update(last_entry.key, handle_encoding);
+      if (do_flush) {
+        // std::cout << "enclosing_mbr: " << enclosing_mbr_ << std::endl;
+        next_level_entries_.push_back(
+            {serializeMbr(enclosing_mbr_),
+             std::unique_ptr<RtreeIndexLevelBuilder>(sub_index_builder_)});
+        enclosing_mbr_.clear();
+        sub_index_builder_ = nullptr;
+      }
+    }
+    if (sub_index_builder_ == nullptr) {
+      MakeNewSubIndexBuilder();
+    }
+    sub_index_builder_->AddIndexEntry(last_partition_block_handle, last_entry.key);
+    expandMbr(enclosing_mbr_, ReadQueryMbr(last_entry.key));
+
+    entries_.pop_front();
+  }
+  // If the current R-tree level has been constructed, move on to the next level.
+  if (UNLIKELY(entries_.empty())) {
+
+    // update R-tree height
+    rtree_level_++;
+
+    if (sub_index_builder_ != nullptr){
+      next_level_entries_.push_back(
+          {serializeMbr(enclosing_mbr_),
+          std::unique_ptr<RtreeIndexLevelBuilder>(sub_index_builder_)});
+      enclosing_mbr_.clear();
+      sub_index_builder_ = nullptr;
+    }
+
+    // return if current level only contains one block
+    // std::cout << "next_level_entries_ size: " << next_level_entries_.size() << std::endl;
+    if (next_level_entries_.size() == 1) {
+      Entry& entry = next_level_entries_.front();
+      auto s = entry.value->Finish(index_blocks);
+      std::cout << "writing the top-level index block with enclosing MBR: " << ReadQueryMbr(entry.key) << std::endl;
+      index_size_ += index_blocks->index_block_contents.size();
+      std::string rtree_level_str;
+      PutVarint32(&rtree_level_str, rtree_level_);
+      index_blocks->meta_blocks.insert(
+        {kRtreeIndexMetadataBlock.c_str(), rtree_level_str});
+      std::cout << "R-tree height: " << rtree_level_ << std::endl;
+      return s;
+    }
+
+    // swaping the contents of entries_ and next_level_entries
+    for (std::list<Entry>::iterator it = next_level_entries_.begin(), end = next_level_entries_.end(); it != end; ++it) {
+      entries_.push_back({it->key, std::move(it->value)});
+    }
+
+    next_level_entries_.clear();
+    // std::cout << "swapped next_level_entries and entries_, entries size: " << entries_.size() << std::endl;
+
+    return Status::Incomplete();
+
+    // index_blocks->index_block_contents = index_block_builder_.Finish();
+
+    // top_level_index_size_ = index_blocks->index_block_contents.size();
+    // index_size_ += top_level_index_size_;
+    // return Status::OK();
+  } else {
+    // Finish the next partition index in line and Incomplete() to indicate we
+    // expect more calls to Finish
+    Entry& entry = entries_.front();
+
+    auto s = entry.value->Finish(index_blocks);
+    // std::cout << "writing an index block to disk with enclosing MBR: " << ReadQueryMbr(entry.key) << std::endl;
+    index_size_ += index_blocks->index_block_contents.size();
+    finishing_indexes = true;
+    return s.ok() ? Status::Incomplete() : s;
+  }
+}
+
+size_t RtreeIndexBuilder::NumPartitions() const { return partition_cnt_; }
+
+// void RtreeIndexLevelBuilder::FindShortestInternalKeySeparator(
+//     const Comparator& comparator, std::string* start, const Slice& limit) {
+//   // Attempt to shorten the user portion of the key
+//   Slice user_start = ExtractUserKey(*start);
+//   Slice user_limit = ExtractUserKey(limit);
+//   std::string tmp(user_start.data(), user_start.size());
+//   comparator.FindShortestSeparator(&tmp, user_limit);
+//   if (tmp.size() <= user_start.size() &&
+//       comparator.Compare(user_start, tmp) < 0) {
+//     // User key has become shorter physically, but larger logically.
+//     // Tack on the earliest possible number to the shortened user key.
+//     PutFixed64(&tmp,
+//                PackSequenceAndType(kMaxSequenceNumber, kValueTypeForSeek));
+//     assert(InternalKeyComparator(&comparator).Compare(*start, tmp) < 0);
+//     assert(InternalKeyComparator(&comparator).Compare(tmp, limit) < 0);
+//     start->swap(tmp);
+//   }
+// }
+
+// void RtreeIndexLevelBuilder::FindShortInternalKeySuccessor(
+//     const Comparator& comparator, std::string* key) {
+//   Slice user_key = ExtractUserKey(*key);
+//   std::string tmp(user_key.data(), user_key.size());
+//   comparator.FindShortSuccessor(&tmp);
+//   if (tmp.size() <= user_key.size() && comparator.Compare(user_key, tmp) < 0) {
+//     // User key has become shorter physically, but larger logically.
+//     // Tack on the earliest possible number to the shortened user key.
+//     PutFixed64(&tmp,
+//                PackSequenceAndType(kMaxSequenceNumber, kValueTypeForSeek));
+//     assert(InternalKeyComparator(&comparator).Compare(*key, tmp) < 0);
+//     key->swap(tmp);
+//   }
+// }
+
 }  // namespace ROCKSDB_NAMESPACE
