@@ -122,17 +122,19 @@ int main() {
 //    block_based_options.flush_block_policy_factory.reset(
 //            new NoiseFlushBlockPolicyFactory());
     options.table_factory.reset(NewBlockBasedTableFactory(block_based_options));
-    options.memtable_factory.reset(new rocksdb::SkipListMbrFactory);
+    options.memtable_factory.reset(new rocksdb::RTreeFactory);
+    options.allow_concurrent_memtable_write = false;
 
 
     Status s;
     s = DB::Open(options, kDBPath, &db);
-
+    std::cout << s.ToString() << std::endl;
     // Failed to open, probably it doesn't exist yet. Try to create it and
     // insert data
     if (!s.ok()) {
         options.create_if_missing = true;
         s = DB::Open(options, kDBPath, &db);
+        std::cout << s.ToString() << std::endl;
         assert(s.ok());
 
         std::string key1 = serialize_key(516, 22.214);
@@ -148,57 +150,57 @@ int main() {
         assert(s.ok());
     }
 
-    // Query the R-tree
+    // // Query the R-tree
 
-    std::string value;
+    // std::string value;
 
-    // Specify the desired bounding box on the iterator
-    rocksdb::ReadOptions read_options;
-    rocksdb::RtreeIteratorContext iterator_context;
+    // // Specify the desired bounding box on the iterator
+    // rocksdb::ReadOptions read_options;
+    // rocksdb::RtreeIteratorContext iterator_context;
 
-    // This scope is needed so that the unique pointer of the iterator runs
-    // out of scope and cleans up things correctly
-    {
-        iterator_context.query_mbr =
-                serialize_query(0, 1000000, 2.1, 10.8);
-        read_options.iterator_context = &iterator_context;
-        std::unique_ptr <rocksdb::Iterator> it(db->NewIterator(read_options));
+    // // This scope is needed so that the unique pointer of the iterator runs
+    // // out of scope and cleans up things correctly
+    // {
+    //     iterator_context.query_mbr =
+    //             serialize_query(0, 1000000, 2.1, 10.8);
+    //     read_options.iterator_context = &iterator_context;
+    //     std::unique_ptr <rocksdb::Iterator> it(db->NewIterator(read_options));
 
-        std::cout << "query 1" << std::endl;
-        // Iterate over the results and print the value
-        for (it->SeekToFirst(); it->Valid(); it->Next()) {
-            Key key = deserialize_key(it->key());
-            std::cout << key.mbr << std::endl;
-        }
-    }
+    //     std::cout << "query 1" << std::endl;
+    //     // Iterate over the results and print the value
+    //     for (it->SeekToFirst(); it->Valid(); it->Next()) {
+    //         Key key = deserialize_key(it->key());
+    //         std::cout << key.mbr << std::endl;
+    //     }
+    // }
 
-    {
-        iterator_context.query_mbr =
-                serialize_query(0, 1000000, 12.4, 30.3);
-        read_options.iterator_context = &iterator_context;
-        std::unique_ptr <rocksdb::Iterator> it(db->NewIterator(read_options));
+    // {
+    //     iterator_context.query_mbr =
+    //             serialize_query(0, 1000000, 12.4, 30.3);
+    //     read_options.iterator_context = &iterator_context;
+    //     std::unique_ptr <rocksdb::Iterator> it(db->NewIterator(read_options));
 
-        std::cout << "query 2" << std::endl;
-        // Iterate over the results and print the value
-        for (it->SeekToFirst(); it->Valid(); it->Next()) {
-            Key key = deserialize_key(it->key());
-            std::cout << key.mbr << std::endl;
-        }
-    }
+    //     std::cout << "query 2" << std::endl;
+    //     // Iterate over the results and print the value
+    //     for (it->SeekToFirst(); it->Valid(); it->Next()) {
+    //         Key key = deserialize_key(it->key());
+    //         std::cout << key.mbr << std::endl;
+    //     }
+    // }
 
-    {
-        iterator_context.query_mbr =
-                serialize_query(0, 1000000, 0.0, 100.0);
-        read_options.iterator_context = &iterator_context;
-        std::unique_ptr <rocksdb::Iterator> it(db->NewIterator(read_options));
+    // {
+    //     iterator_context.query_mbr =
+    //             serialize_query(0, 1000000, 0.0, 100.0);
+    //     read_options.iterator_context = &iterator_context;
+    //     std::unique_ptr <rocksdb::Iterator> it(db->NewIterator(read_options));
 
-        std::cout << "query 3" << std::endl;
-        // Iterate over the results and print the value
-        for (it->SeekToFirst(); it->Valid(); it->Next()) {
-            Key key = deserialize_key(it->key());
-            std::cout << key.mbr << std::endl;
-        }
-    }
+    //     std::cout << "query 3" << std::endl;
+    //     // Iterate over the results and print the value
+    //     for (it->SeekToFirst(); it->Valid(); it->Next()) {
+    //         Key key = deserialize_key(it->key());
+    //         std::cout << key.mbr << std::endl;
+    //     }
+    // }
 
     delete db;
 
