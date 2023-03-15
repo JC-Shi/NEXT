@@ -19,8 +19,8 @@ class RtreeIndexReader : public BlockBasedTable::IndexReaderCommon {
   // On success, index_reader will be populated; otherwise it will remain
   // unmodified.
   static Status Create(const BlockBasedTable* table, const ReadOptions& ro,
-                       FilePrefetchBuffer* prefetch_buffer, bool use_cache,
-                       bool prefetch, bool pin,
+                       FilePrefetchBuffer* prefetch_buffer, InternalIterator* meta_index_iter, 
+                       bool use_cache, bool prefetch, bool pin,
                        BlockCacheLookupContext* lookup_context,
                        std::unique_ptr<IndexReader>* index_reader);
 
@@ -41,6 +41,8 @@ class RtreeIndexReader : public BlockBasedTable::IndexReaderCommon {
     // TODO(myabandeh): more accurate estimate of partition_map_ mem usage
     return usage;
   }
+ protected:
+  uint32_t rtree_height_;
 
  private:
   RtreeIndexReader(const BlockBasedTable* t,
@@ -51,5 +53,6 @@ class RtreeIndexReader : public BlockBasedTable::IndexReaderCommon {
   // none" so that !partition_map_.empty() can use an iterator expecting
   // all partitions to be saved here.
   UnorderedMap<uint64_t, CachableEntry<Block>> partition_map_;
+//   uint32_t rtree_height_;
 };
 }  // namespace ROCKSDB_NAMESPACE

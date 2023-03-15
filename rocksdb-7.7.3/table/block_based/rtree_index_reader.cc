@@ -12,14 +12,19 @@
 #include "table/block_based/block_based_table_reader.h"
 #include "table/block_based/rtree_index_iterator.h"
 
+#include "table/block_fetcher.h"
+#include "table/meta_blocks.h"
+
 namespace ROCKSDB_NAMESPACE {
 Status RtreeIndexReader::Create(
     const BlockBasedTable* table, const ReadOptions& ro,
-    FilePrefetchBuffer* prefetch_buffer, bool use_cache, bool prefetch,
+    FilePrefetchBuffer* prefetch_buffer, InternalIterator* meta_index_iter, bool use_cache, bool prefetch,
     bool pin, BlockCacheLookupContext* lookup_context,
     std::unique_ptr<IndexReader>* index_reader) {
   assert(table != nullptr);
-  assert(table->get_rep());
+
+  const BlockBasedTable::Rep* rep = table->get_rep();
+  assert(rep != nullptr);
   assert(!pin || prefetch);
   assert(index_reader != nullptr);
 
@@ -39,6 +44,57 @@ Status RtreeIndexReader::Create(
   }
 
   index_reader->reset(new RtreeIndexReader(table, std::move(index_block)));
+
+  // std::cout << "get rtree index meta block" << std::endl;
+
+  // Get metadata block
+  BlockHandle meta_handle;
+  Status s =
+      FindMetaBlock(meta_index_iter, kRtreeIndexMetadataBlock, &meta_handle);
+  // std::cout << s.ToString() << std::endl;
+  if (!s.ok()) {
+    // TODO: log error
+    return Status::OK();
+  }
+
+  RandomAccessFileReader* const file = rep->file.get();
+  const Footer& footer = rep->footer;
+  const ImmutableOptions& ioptions = rep->ioptions;
+  const PersistentCacheOptions& cache_options = rep->persistent_cache_options;
+  MemoryAllocator* const memory_allocator =
+      GetMemoryAllocator(rep->table_options);
+
+
+
+  // Read contents for the blocks
+  BlockContents meta_contents;
+  BlockFetcher meta_block_fetcher(
+      file, prefetch_buffer, footer, ReadOptions(), meta_handle,
+      &meta_contents, ioptions, true /*decompress*/,
+      true /*maybe_compressed*/, BlockType::kRtreeIndexMetadata,
+      UncompressionDict::GetEmptyDict(), cache_options, memory_allocator);
+  s = meta_block_fetcher.ReadBlockContents();
+  if (!s.ok()) {
+    return s;
+  }
+
+  // std::cout << "finish reading rtree index meta block" << std::endl;
+
+  Slice& meta_data = meta_contents.data;
+
+  uint32_t rtree_height = 0;
+
+  if (!GetVarint32(&meta_data, &rtree_height)) {
+    s = Status::Corruption(
+        "Corrupted prefix meta block: unable to read from it.");
+  }
+
+  RtreeIndexReader* const rtree_index_reader =
+        static_cast<RtreeIndexReader*>(index_reader->get());
+    rtree_index_reader->rtree_height_ = rtree_height;
+  
+  // std::cout << "Rtree_height: " << rtree_index_reader->rtree_height_ << std::endl;
+
 
   // std::cout << "finished creating RtreeIndexReader" << std::endl;
 
@@ -69,6 +125,7 @@ InternalIteratorBase<IndexValue>* RtreeIndexReader::NewIterator(
   Statistics* kNullStats = nullptr;
   // Filters are already checked before seeking the index
   if (!partition_map_.empty()) {
+    // std::cout << "partition_map_ not empty" << std::endl;
     // We don't return pinned data from index blocks, so no need
     // to set `block_contents_pinned`.
     it = NewTwoLevelIterator(
@@ -80,6 +137,7 @@ InternalIteratorBase<IndexValue>* RtreeIndexReader::NewIterator(
             index_has_first_key(), index_key_includes_seq(),
             index_value_is_full()));
   } else {
+    // std::cout << "partition_map_ empty" << std::endl;
     ReadOptions ro;
     ro.fill_cache = read_options.fill_cache;
     ro.deadline = read_options.deadline;
@@ -104,10 +162,12 @@ InternalIteratorBase<IndexValue>* RtreeIndexReader::NewIterator(
             index_has_first_key(), index_key_includes_seq(),
             index_value_is_full()));
 
+    // std::cout << "rtree_index_reader rtree_height_: " << rtree_height_ << std::endl;
+
     it = new RtreeIndexIterator(
         table(), ro, *internal_comparator(), std::move(index_iter),
         lookup_context ? lookup_context->caller
-                       : TableReaderCaller::kUncategorized);
+                       : TableReaderCaller::kUncategorized, rtree_height_);
   }
 
   assert(it != nullptr);

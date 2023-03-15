@@ -479,7 +479,7 @@ class RtreeIndexLevelBuilder : public IndexBuilder {
     Slice key_temp = Slice(key);
     Mbr mbr = ReadKeyMbr(key_temp);
     expandMbr(enclosing_mbr_, mbr);
-    std::cout << "enclosing_mbr_ after expansion: " << enclosing_mbr_ << std::endl;
+    // std::cout << "enclosing_mbr_ after expansion: " << enclosing_mbr_ << std::endl;
   }
 
   virtual void AddIndexEntry(std::string* last_key_in_current_block,
@@ -675,6 +675,7 @@ class RtreeIndexBuilder : public IndexBuilder {
   Mbr sub_index_enclosing_mbr_;
   Mbr enclosing_mbr_;
   uint32_t rtree_level_;
+  std::string rtree_height_str_;
   void expandMbr(Mbr& to_expand, Mbr expander) {
     if (to_expand.empty()) {
       to_expand = expander;

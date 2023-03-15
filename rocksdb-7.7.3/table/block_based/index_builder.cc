@@ -457,20 +457,26 @@ Status RtreeIndexBuilder::Finish(
     if (next_level_entries_.size() == 1) {
       Entry& entry = next_level_entries_.front();
       auto s = entry.value->Finish(index_blocks);
-      std::cout << "writing the top-level index block with enclosing MBR: " << ReadQueryMbr(entry.key) << std::endl;
+      // std::cout << "writing the top-level index block with enclosing MBR: " << ReadQueryMbr(entry.key) << std::endl;
       index_size_ += index_blocks->index_block_contents.size();
-      std::string rtree_level_str;
-      PutVarint32(&rtree_level_str, rtree_level_);
+      PutVarint32(&rtree_height_str_, rtree_level_);
       index_blocks->meta_blocks.insert(
-        {kRtreeIndexMetadataBlock.c_str(), rtree_level_str});
-      std::cout << "R-tree height: " << rtree_level_ << std::endl;
+        {kRtreeIndexMetadataBlock.c_str(), rtree_height_str_});
+      // std::cout << "R-tree height: " << rtree_level_ << std::endl;
       return s;
     }
 
     // swaping the contents of entries_ and next_level_entries
     for (std::list<Entry>::iterator it = next_level_entries_.begin(), end = next_level_entries_.end(); it != end; ++it) {
       entries_.push_back({it->key, std::move(it->value)});
+      // std::cout << "add new item to entries: " << ReadQueryMbr(it->key) << std::endl;
     }
+
+    Entry& entry = entries_.front();
+    auto s = entry.value->Finish(index_blocks);
+    // std::cout << "writing an index block to disk with enclosing MBR: " << ReadQueryMbr(entry.key) << std::endl;
+    index_size_ += index_blocks->index_block_contents.size();
+    finishing_indexes = true;
 
     next_level_entries_.clear();
     // std::cout << "swapped next_level_entries and entries_, entries size: " << entries_.size() << std::endl;

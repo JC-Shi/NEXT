@@ -2682,8 +2682,8 @@ Status BlockBasedTable::CreateIndexReader(
       }
     }
     case BlockBasedTableOptions::kRtreeSearch: {
-      return RtreeIndexReader::Create(this, ro, prefetch_buffer, use_cache,
-                                          prefetch, pin, lookup_context,
+      return RtreeIndexReader::Create(this, ro, prefetch_buffer, meta_iter,
+                                          use_cache, prefetch, pin, lookup_context,
                                           index_reader);
       // return PartitionIndexReader::Create(this, ro, prefetch_buffer, use_cache,
       //                                     prefetch, pin, lookup_context,

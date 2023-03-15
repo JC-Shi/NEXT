@@ -15,6 +15,7 @@
 #include "util/rtree.h"
 
 #include <iostream>
+#include <stack>
 
 namespace ROCKSDB_NAMESPACE {
 // Iterator that iterates over partitioned index.
@@ -29,7 +30,7 @@ class RtreeIndexIterator : public InternalIteratorBase<IndexValue> {
       const BlockBasedTable* table, const ReadOptions& read_options,
       const InternalKeyComparator& icomp,
       std::unique_ptr<InternalIteratorBase<IndexValue>>&& index_iter,
-      TableReaderCaller caller, size_t compaction_readahead_size = 0)
+      TableReaderCaller caller, uint32_t rtree_height, size_t compaction_readahead_size = 0)
       : index_iter_(std::move(index_iter)),
         table_(table),
         read_options_(read_options),
@@ -41,17 +42,24 @@ class RtreeIndexIterator : public InternalIteratorBase<IndexValue> {
         lookup_context_(caller),
         block_prefetcher_(
             compaction_readahead_size,
-            table_->get_rep()->table_options.initial_auto_readahead_size) {
+            table_->get_rep()->table_options.initial_auto_readahead_size),
+        rtree_height_(rtree_height) {
     if (read_options.iterator_context != nullptr) {
       RtreeIteratorContext* context =
           reinterpret_cast<RtreeIteratorContext*>(read_options.iterator_context);
       Slice query_slice(context->query_mbr);
       query_mbr_ = ReadQueryMbr(query_slice);
       // std::cout << "query_mbr_: " << query_mbr_ << std::endl;
+      // std::cout << "rtree_index_iterator rtree_height_: " << rtree_height_ << std::endl;
     }
   }
 
   ~RtreeIndexIterator() override {}
+
+  struct StackElement {
+    IndexBlockIter block_iter;
+    uint32_t level;
+  };
 
   void Seek(const Slice& target) override;
   void SeekForPrev(const Slice&) override {
@@ -160,13 +168,21 @@ class RtreeIndexIterator : public InternalIteratorBase<IndexValue> {
   BlockCacheLookupContext lookup_context_;
   BlockPrefetcher block_prefetcher_;
   Mbr query_mbr_;
+  uint32_t rtree_height_;
+  std::stack<StackElement*> iterator_stack_;
 
   // If `target` is null, seek to first.
   void SeekImpl(const Slice* target);
 
-  void InitPartitionedIndexBlock();
+  void InitPartitionedIndexBlock(IndexBlockIter* block_iter=nullptr);
+  void InitRtreeIntermediateIndexBlock(IndexBlockIter* block_iter);
+  void InitRtreeIntermediateIndexBlock(IndexBlockIter* input_block_iter, IndexBlockIter* block_iter);
   void FindKeyForward();
   void FindBlockForward();
   void FindKeyBackward();
+  void RtreeIndexIterSeekToFirst(IndexBlockIter* block_iter);
+  void RtreeIndexIterNext(IndexBlockIter* block_iter);
+  void AddChildToStack();
+  void AddChildToStack(StackElement* input_block_iter);
 };
 }  // namespace ROCKSDB_NAMESPACE

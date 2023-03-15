@@ -26,7 +26,7 @@ start = time.time()
 
 # n_test_queries = min(100, len(query_list))
 # n_test_queries = len(query_list)
-n_test_queries = 100
+n_test_queries = 1000
 
 total_time = 0
 for i in range(n_test_queries):

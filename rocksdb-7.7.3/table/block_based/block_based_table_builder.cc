@@ -58,6 +58,7 @@ namespace ROCKSDB_NAMESPACE {
 
 extern const std::string kHashIndexPrefixesBlock;
 extern const std::string kHashIndexPrefixesMetadataBlock;
+extern const std::string kRtreeIndexMetadataBlock;
 
 
 // Without anonymous namespace here, we fail the warning -Wmissing-prototypes
@@ -1642,6 +1643,16 @@ void BlockBasedTableBuilder::WriteIndexBlock(
                       index_block_handle, BlockType::kIndex);
       }
       // The last index_block_handle will be for the partition index block
+    }
+    if (ok()) {
+      for (const auto& item : index_blocks.meta_blocks) {
+        BlockHandle block_handle;
+        WriteBlock(item.second, &block_handle, BlockType::kIndex);
+        if (!ok()) {
+          break;
+        }
+        meta_index_builder->Add(item.first, block_handle);
+      }
     }
   }
 }
