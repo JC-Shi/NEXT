@@ -14,6 +14,7 @@
 #include <algorithm>
 #include <functional>
 #include <vector>
+#include <iostream>
 
 #define ASSERT assert // RTree uses ASSERT( condition )
 #ifndef Min
@@ -139,10 +140,10 @@ public:
     ~Iterator()                                   { }
 
     /// Is iterator invalid
-    bool IsNull()                                 { return (m_tos <= 0); }
+    bool IsNull() const                               { return (m_tos <= 0); }
 
     /// Is iterator pointing to valid data
-    bool IsNotNull()                              { return (m_tos > 0); }
+    bool IsNotNull()  const                            { return (m_tos > 0); }
 
     /// Access the current data element. Caller must be sure iterator is not NULL first.
     DATATYPE& operator*()
@@ -156,7 +157,7 @@ public:
     const DATATYPE& operator*() const
     {
       ASSERT(IsNotNull());
-      StackElement& curTos = m_stack[m_tos - 1];
+      const StackElement& curTos = m_stack[m_tos - 1];
       return curTos.m_node->m_branch[curTos.m_branchIndex].m_data;
     }
 
@@ -164,10 +165,10 @@ public:
     bool operator++()                             { return FindNextData(); }
 
     /// Get the bounds for this node
-    void GetBounds(ELEMTYPE a_min[NUMDIMS], ELEMTYPE a_max[NUMDIMS])
+    void GetBounds (ELEMTYPE a_min[NUMDIMS], ELEMTYPE a_max[NUMDIMS]) const
     {
       ASSERT(IsNotNull());
-      StackElement& curTos = m_stack[m_tos - 1];
+      const StackElement& curTos = m_stack[m_tos - 1];
       Branch& curBranch = curTos.m_node->m_branch[curTos.m_branchIndex];
 
       for(int index = 0; index < NUMDIMS; ++index)
@@ -272,13 +273,15 @@ public:
   }
 
   /// Get Next for iteration
-  void GetNext(Iterator& a_it)                    { ++a_it; }
+  void GetNext(Iterator& a_it)                         { ++a_it; }
 
   /// Is iterator NULL, or at end?
-  bool IsNull(Iterator& a_it)                     { return a_it.IsNull(); }
+  bool IsNull(Iterator& a_it) const                   { return a_it.IsNull(); }
 
   /// Get object at iterator position
-  DATATYPE& GetAt(Iterator& a_it)                 { return *a_it; }
+  DATATYPE& GetAt(Iterator& a_it)                { 
+    int& p_it = *a_it;
+    return p_it; }
 
 protected:
 

@@ -47,7 +47,6 @@ uint64_t decode_value(std::string& value) {
 }
 
 struct Key {
-    std::string keypath;
     Mbr mbr;
 };
 
@@ -83,6 +82,9 @@ public:
         } else {
             return 0;
         }
+
+        // // Specifically for R-tree as r-tree does not implement ordering
+        // return 1;
     }
 
     void FindShortestSeparator(std::string* start,
@@ -96,7 +98,9 @@ public:
 };
 
 int main(int argc, char* argv[]) {
+
     std::string kDBPath = argv[1];
+
     int dataSize = int(atoi(argv[2]));
     std::ifstream dataFile(argv[3]);
     std::cout << "data size: " << dataSize << std::endl;
@@ -115,13 +119,20 @@ int main(int argc, char* argv[]) {
 //    block_based_options.flush_block_policy_factory.reset(
 //            new NoiseFlushBlockPolicyFactory());
     options.table_factory.reset(NewBlockBasedTableFactory(block_based_options));
-    options.memtable_factory.reset(new rocksdb::SkipListMbrFactory);
+    // options.memtable_factory.reset(new rocksdb::SkipListMbrFactory);
+    options.memtable_factory.reset(new rocksdb::RTreeFactory);
+    options.allow_concurrent_memtable_write = false;
 
     // Set the write buffer size to 64 MB
     options.write_buffer_size = 64 * 1024 * 1024;
 
+    // options.level0_file_num_compaction_trigger = 10;
+    // options.max_bytes_for_level_base = 512 * 1024 * 1024;
+    options.check_flush_compaction_key_order = false;
+
     Status s;
     s = DB::Open(options, kDBPath, &db);
+    std::cout << "Open DB status: " << s.ToString() << std::endl;
 
     uint32_t id;
     uint32_t op;
@@ -132,6 +143,7 @@ int main(int argc, char* argv[]) {
     if (!s.ok()) {
         options.create_if_missing = true;
         s = DB::Open(options, kDBPath, &db);
+        std::cout << "Create if missing: " << s.ToString() << std::endl;
         assert(s.ok());
 
         std::cout << "start writing data" << std::endl;
@@ -142,6 +154,7 @@ int main(int argc, char* argv[]) {
             // if (i == 0) {
             //     std::cout << op << id << low[0] << low[1] << high[0] << high[1];
             // }
+
             std::string key = serialize_key(id, low[0], low[1]);
 
             // Put key-value
@@ -150,8 +163,13 @@ int main(int argc, char* argv[]) {
             auto end = std::chrono::high_resolution_clock::now(); 
             auto duration = std::chrono::duration_cast<std::chrono::nanoseconds>(end - start);
             totalDuration = totalDuration + duration;
+            // assert(s.ok());
         }
+        std::cout << "Status: " << s.ToString() << std::endl;
         assert(s.ok());
+
+        // std::cout << "Status: " << s.ToString() << std::endl;
+
         std::cout << "end writing data" << std::endl;
         std::cout << "Execution time: " << totalDuration.count() << " nanoseconds" << std::endl;
 
