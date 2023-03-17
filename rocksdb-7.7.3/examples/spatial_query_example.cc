@@ -142,12 +142,12 @@ int main() {
         std::cout << "key1: " << key1 << std::endl;
 
         // Put key-value
-        s = db->Put(WriteOptions(), key1, "");
+        s = db->Put(WriteOptions(), key1, "key1");
         assert(s.ok());
 
         std::string key2 = serialize_key(1124, 4.1432);
         std::cout << "key2: " << key2 << std::endl;
-        s = db->Put(WriteOptions(), key2, "");
+        s = db->Put(WriteOptions(), key2, "key2");
         assert(s.ok());
     }
 
@@ -202,6 +202,13 @@ int main() {
             std::cout << key.mbr << std::endl;
         }
     }
+    std::string key1 = serialize_key(516, 22.214);
+    s = db->Get(read_options, key1, &value);
+    if (s.ok()) {
+        std::cout << "value: " << value << std::endl;
+    }
+
+
 
     delete db;
 

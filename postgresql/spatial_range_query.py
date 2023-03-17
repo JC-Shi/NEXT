@@ -16,7 +16,7 @@ conn = psycopg2.connect(
 cur = conn.cursor()
 
 queries = open(
-    "/home_nfs/jingyi/lsm/data/query_india_0.001_0.01_test_10000.sql", "r")
+    "/home_nfs/jingyi/lsm/data/query_india_0.01_0.1_test_10000.sql", "r")
 
 query_list = []
 for line in queries:
@@ -26,7 +26,7 @@ start = time.time()
 
 # n_test_queries = min(100, len(query_list))
 # n_test_queries = len(query_list)
-n_test_queries = 1000
+n_test_queries = 100
 
 total_time = 0
 for i in range(n_test_queries):

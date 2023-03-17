@@ -16,26 +16,47 @@ void RtreeIndexIterator::SeekToFirst() {
 void RtreeIndexIterator::SeekImpl(const Slice* target) {
   SavePrevIndexValue();
 
-  if (target) {
-    index_iter_->Seek(*target);
-  } else {
-    index_iter_->SeekToFirst();
-    // std::cout << "top level index first entry mbr: " << ReadQueryMbr(index_iter_->key()) << std::endl;
-    // std::cout << "index_iter_valid(): " << index_iter_->Valid() << " not intersect: " << (!IntersectMbr(ReadQueryMbr(index_iter_->key()), query_mbr_)) << std::endl;
-    while (index_iter_->Valid() && !IntersectMbr(ReadQueryMbr(index_iter_->key()), query_mbr_)) {
-      // std::cout << "skipping top level index entry" << std::endl;
-      index_iter_->Next();
-      // std::cout << "next top level index mbr: " << ReadQueryMbr(index_iter_->key()) << std::endl;
+  if (target != nullptr) {
+    query_mbr_ = ReadKeyMbr(*target);
+    // std::cout << "query_mbr_: " << query_mbr_ << std::endl;
+  }
+
+  index_iter_->SeekToFirst();
+  // std::cout << "top level index first entry mbr: " << ReadQueryMbr(index_iter_->key()) << std::endl;
+  // std::cout << "index_iter_valid(): " << index_iter_->Valid() << " not intersect: " << (!IntersectMbr(ReadQueryMbr(index_iter_->key()), query_mbr_)) << std::endl;
+  while (index_iter_->Valid() && !IntersectMbr(ReadQueryMbr(index_iter_->key()), query_mbr_)) {
+    // std::cout << "skipping top level index entry" << std::endl;
+    index_iter_->Next();
+    // std::cout << "next top level index mbr: " << ReadQueryMbr(index_iter_->key()) << std::endl;
+  }
+  if (rtree_height_ > 2) {
+    // if index_iter_ is Valid, and some of the next level node intersects with the query, add iterator to stack.
+    if (index_iter_->Valid()) {
+      AddChildToStack();
     }
-    if (rtree_height_ > 2) {
-      // if index_iter_ is Valid, and some of the next level node intersects with the query, add iterator to stack.
+    // std::cout << "iterator_stack size: " << iterator_stack_.size() << std::endl;
+    // to deal with the case where the index_iter_ is still valid, but no child iterator added to stack
+    while (iterator_stack_.empty() && index_iter_->Valid()) {
+      // std::cout << "iterator_stack empty, advancing index_iter_" << std::endl;
+      do {
+        // std::cout << "skipping top level index entry" << std::endl;
+        index_iter_->Next();
+        // std::cout << "next top level index mbr: " << ReadQueryMbr(index_iter_->key()) << std::endl;
+      } while (index_iter_->Valid() && !IntersectMbr(ReadQueryMbr(index_iter_->key()), query_mbr_));
       if (index_iter_->Valid()) {
         AddChildToStack();
       }
-      // std::cout << "iterator_stack size: " << iterator_stack_.size() << std::endl;
-      // to deal with the case where the index_iter_ is still valid, but no child iterator added to stack
+    }
+    while(!iterator_stack_.empty() && iterator_stack_.top()->level > 2){
+      StackElement* current_top = iterator_stack_.top();
+      if (!current_top->block_iter.Valid()) {
+        iterator_stack_.pop();
+      }
+      else {
+        AddChildToStack(current_top);
+        RtreeIndexIterNext(&(current_top->block_iter));
+      }
       while (iterator_stack_.empty() && index_iter_->Valid()) {
-        // std::cout << "iterator_stack empty, advancing index_iter_" << std::endl;
         do {
           // std::cout << "skipping top level index entry" << std::endl;
           index_iter_->Next();
@@ -43,30 +64,11 @@ void RtreeIndexIterator::SeekImpl(const Slice* target) {
         } while (index_iter_->Valid() && !IntersectMbr(ReadQueryMbr(index_iter_->key()), query_mbr_));
         if (index_iter_->Valid()) {
           AddChildToStack();
-        }
-      }
-      while(!iterator_stack_.empty() && iterator_stack_.top()->level > 2){
-        StackElement* current_top = iterator_stack_.top();
-        if (!current_top->block_iter.Valid()) {
-          iterator_stack_.pop();
-        }
-        else {
-          AddChildToStack(current_top);
-          RtreeIndexIterNext(&(current_top->block_iter));
-        }
-        while (iterator_stack_.empty() && index_iter_->Valid()) {
-          do {
-            // std::cout << "skipping top level index entry" << std::endl;
-            index_iter_->Next();
-            // std::cout << "next top level index mbr: " << ReadQueryMbr(index_iter_->key()) << std::endl;
-          } while (index_iter_->Valid() && !IntersectMbr(ReadQueryMbr(index_iter_->key()), query_mbr_));
-          if (index_iter_->Valid()) {
-            AddChildToStack();
-          }   
-        }
+        }   
       }
     }
   }
+
 
   if (!index_iter_->Valid()) {
     ResetPartitionedIndexIter();
@@ -81,15 +83,13 @@ void RtreeIndexIterator::SeekImpl(const Slice* target) {
     InitPartitionedIndexBlock(&(iterator_stack_.top()->block_iter));
   }
 
-  if (target) {
-    block_iter_.Seek(*target);
-  } else {
-    block_iter_.SeekToFirst();
-    // std::cout << "block_iter_ initial MBR: " << ReadQueryMbr(block_iter_.key()) << std::endl;
-    while (block_iter_.Valid() && !IntersectMbr(ReadQueryMbr(block_iter_.key()), query_mbr_)) {
-      block_iter_.Next();
-    }
+
+  block_iter_.SeekToFirst();
+  // std::cout << "block_iter_ initial MBR: " << ReadQueryMbr(block_iter_.key()) << std::endl;
+  while (block_iter_.Valid() && !IntersectMbr(ReadQueryMbr(block_iter_.key()), query_mbr_)) {
+    block_iter_.Next();
   }
+  
   FindKeyForward();
 
   // std::cout << "First index entry value: " << ReadQueryMbr(block_iter_.key()) << std::endl;
