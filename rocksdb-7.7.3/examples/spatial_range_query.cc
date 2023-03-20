@@ -18,14 +18,14 @@
 
 using namespace rocksdb;
 
-std::string serialize_key(uint64_t iid, double x_value, double y_value) {
+std::string serialize_key(uint64_t iid, double xValue, double yValue) {
     std::string key;
     // The R-tree stores boxes, hence duplicate the input values
     key.append(reinterpret_cast<const char*>(&iid), sizeof(uint64_t));
-    key.append(reinterpret_cast<const char*>(&x_value), sizeof(double));
-    key.append(reinterpret_cast<const char*>(&x_value), sizeof(double));
-    key.append(reinterpret_cast<const char*>(&y_value), sizeof(double));
-    key.append(reinterpret_cast<const char*>(&y_value), sizeof(double));
+    key.append(reinterpret_cast<const char*>(&xValue), sizeof(double));
+    key.append(reinterpret_cast<const char*>(&xValue), sizeof(double));
+    key.append(reinterpret_cast<const char*>(&yValue), sizeof(double));
+    key.append(reinterpret_cast<const char*>(&yValue), sizeof(double));
     return key;
 }
 
@@ -48,7 +48,6 @@ uint64_t decode_value(std::string& value) {
 }
 
 struct Key {
-    std::string keypath;
     Mbr mbr;
 };
 
@@ -77,13 +76,16 @@ public:
         const uint64_t* value_a = reinterpret_cast<const uint64_t*>(slice_a.data());
         const uint64_t* value_b = reinterpret_cast<const uint64_t*>(slice_b.data());
 
-        if (*value_a < *value_b) {
-            return -1;
-        } else if (*value_a > *value_b) {
-            return 1;
-        } else {
-            return 0;
-        }
+        // if (*value_a < *value_b) {
+        //     return -1;
+        // } else if (*value_a > *value_b) {
+        //     return 1;
+        // } else {
+        //     return 0;
+        // }
+
+        // Specifically for R-tree as r-tree does not implement ordering
+        return 1;
     }
 
     void FindShortestSeparator(std::string* start,
@@ -119,7 +121,12 @@ int main(int argc, char* argv[]) {
 //    block_based_options.flush_block_policy_factory.reset(
 //            new NoiseFlushBlockPolicyFactory());
     options.table_factory.reset(NewBlockBasedTableFactory(block_based_options));
-    options.memtable_factory.reset(new rocksdb::SkipListMbrFactory);
+    // options.memtable_factory.reset(new rocksdb::SkipListMbrFactory);
+    options.memtable_factory.reset(new rocksdb::RTreeFactory);
+    options.allow_concurrent_memtable_write = false;
+
+    options.check_flush_compaction_key_order = false;
+    options.force_consistency_checks = false;
 
     // Set the write buffer size to 64 MB
     options.write_buffer_size = 64 * 1024 * 1024;
@@ -127,6 +134,7 @@ int main(int argc, char* argv[]) {
 
     Status s;
     s = DB::Open(options, kDBPath, &db);
+    std::cout << "Open DB status: " << s.ToString() << std::endl;
 
     uint32_t id;
     uint32_t op;
@@ -153,9 +161,12 @@ int main(int argc, char* argv[]) {
         std::unique_ptr <rocksdb::Iterator> it(db->NewIterator(read_options));
 
         // Iterate over the results and print the value
+        // int count=0;
         for (it->SeekToFirst(); it->Valid(); it->Next()) {
             Key key = deserialize_key(it->key());
+            // count++;
         }
+        // std::cout << "# Query Results: " << count << std::endl;
         auto end = std::chrono::high_resolution_clock::now(); 
         auto duration = std::chrono::duration_cast<std::chrono::nanoseconds>(end - start);
         totalDuration = totalDuration + duration;

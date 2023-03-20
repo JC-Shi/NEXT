@@ -5,6 +5,8 @@
 //
 #include <random>
 
+#include <iostream>
+
 #include "db/memtable.h"
 #include "memory/arena.h"
 #include "memtable/inlineskiplist.h"
@@ -358,19 +360,21 @@ class SkipListMbrRep : public SkipListRep {
                 RtreeIteratorContext* context =
                     reinterpret_cast<RtreeIteratorContext*>(iterator_context);
                 Slice query_slice = Slice(context->query_mbr);
-                Slice keypath_slice;
-                GetLengthPrefixedSlice(&query_slice, &keypath_slice);
-                query_keypath_ = keypath_slice.ToString();
+                // Slice keypath_slice;
+                // GetLengthPrefixedSlice(&query_slice, &keypath_slice);
+                // query_keypath_ = keypath_slice.ToString();
                 query_mbr_ = ReadQueryMbr(query_slice);
             }
         }
 
         virtual void Next() override {
+            std::cout << "SkipListRep::Next()" << std::endl;
             SkipListRep::Iterator::Next();
             NextIfDisjoint();
         }
 
         virtual void SeekToFirst() override {
+            std::cout << "SkipListRep::SeekToFirst()" << std::endl;
             SkipListRep::Iterator::SeekToFirst();
             NextIfDisjoint();
         }
@@ -380,25 +384,34 @@ class SkipListMbrRep : public SkipListRep {
         Mbr query_mbr_;
         // Keypath of the query (to ensure querying the data of the same keypath)
         // keypath is kind of pre-define index which physically partition the data
-        std::string query_keypath_;
+        // std::string query_keypath_;
 
         // The NextIfDisjoint skip key if it does not intersect with the query mbr
         void NextIfDisjoint() {
-            if (Valid() && !query_keypath_.empty()) {
-                Slice internal_key = GetLengthPrefixedSlice(key());
-                Slice key = ExtractUserKey(internal_key);
-                Slice keypath;
-                GetLengthPrefixedSlice(&key, &keypath);
+            // if (Valid() && !query_keypath_.empty()) {
+            //     Slice internal_key = GetLengthPrefixedSlice(key());
+            //     Slice key = ExtractUserKey(internal_key);
+            //     Slice keypath;
+            //     GetLengthPrefixedSlice(&key, &keypath);
 
-                if (keypath.compare(Slice(query_keypath_)) != 0) {
-                    Next();
-                } else {
-                    Mbr mbr = ReadKeyMbr(key);
-                    if (!IntersectMbr(mbr, query_mbr_)) {
-                        Next();
-                    }
-                }
+            //     if (keypath.compare(Slice(query_keypath_)) != 0) {
+            //         Next();
+            //     } else {
+            //         Mbr mbr = ReadKeyMbr(key);
+            //         if (!IntersectMbr(mbr, query_mbr_)) {
+            //             Next();
+            //         }
+            //     }
+            // }
+
+          if (Valid()) {
+            Slice internal_key = GetLengthPrefixedSlice(key());
+            Slice key = ExtractUserKey(internal_key);
+            Mbr mbr = ReadKeyMbr(key);
+            if (!IntersectMbr(mbr, query_mbr_)) {
+              Next();
             }
+          }  
         }
     };
 

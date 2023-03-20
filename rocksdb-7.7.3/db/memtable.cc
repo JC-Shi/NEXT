@@ -11,6 +11,7 @@
 
 #include <algorithm>
 #include <array>
+#include <iostream>
 #include <limits>
 #include <memory>
 
@@ -421,7 +422,10 @@ class MemTableIterator : public InternalIterator {
   PinnedIteratorsManager* pinned_iters_mgr_ = nullptr;
 #endif
 
-  bool Valid() const override { return valid_ && status_.ok(); }
+  bool Valid() const override { 
+    // std::cout << "memtableiterator valid: " << valid_ << " status: " << status_.ok() << std::endl;
+    return valid_ && status_.ok(); 
+  }
   void Seek(const Slice& k) override {
     PERF_TIMER_GUARD(seek_on_memtable_time);
     PERF_COUNTER_ADD(seek_on_memtable_count, 1);

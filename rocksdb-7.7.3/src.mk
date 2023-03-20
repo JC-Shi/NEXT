@@ -131,6 +131,7 @@ LIB_SOURCES =                                                   \
   memtable/hash_linklist_rep.cc                                 \
   memtable/hash_skiplist_rep.cc                                 \
   memtable/skiplistrep.cc                                       \
+  memtable/rtreerep.cc                                         \
   memtable/vectorrep.cc                                         \
   memtable/write_buffer_manager.cc                              \
   monitoring/histogram.cc                                       \
@@ -536,6 +537,7 @@ TEST_MAIN_SOURCES =                                                     \
   memory/memory_allocator_test.cc                                       \
   memtable/inlineskiplist_test.cc                                       \
   memtable/skiplist_test.cc                                             \
+  memtable/rtreerep.cc                                                 \
   memtable/write_buffer_manager_test.cc                                 \
   monitoring/histogram_test.cc                                          \
   monitoring/iostats_context_test.cc                                    \

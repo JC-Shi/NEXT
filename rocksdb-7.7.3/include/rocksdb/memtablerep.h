@@ -390,6 +390,23 @@ private:
     const size_t lookahead_;
 };
 
+// Adding RtreeFactory
+class RTreeFactory : public MemTableRepFactory {
+public:
+    explicit RTreeFactory() {}
+
+    // Methods for MemTableRepFactory class overrides
+    using MemTableRepFactory::CreateMemTableRep;
+    virtual MemTableRep* CreateMemTableRep(const MemTableRep::KeyComparator&,
+                                           Allocator*, const SliceTransform*,
+                                           Logger* logger) override;
+
+    virtual const char* Name() const override {return "RTreeFactory";}
+
+    bool IsInsertConcurrentlySupported() const override { return  false; }
+};
+
+
 #ifndef ROCKSDB_LITE
 // This creates MemTableReps that are backed by an std::vector. On iteration,
 // the vector is sorted. This is useful for workloads where iteration is very

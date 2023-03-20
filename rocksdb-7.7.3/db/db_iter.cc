@@ -34,6 +34,8 @@
 #include "util/string_util.h"
 #include "util/user_comparator_wrapper.h"
 
+#include "util/rtree.h"
+
 namespace ROCKSDB_NAMESPACE {
 
 DBIter::DBIter(Env* _env, const ReadOptions& read_options,
@@ -127,6 +129,7 @@ bool DBIter::ParseKey(ParsedInternalKey* ikey) {
 }
 
 void DBIter::Next() {
+  // std::cout << "DBIter Next()" << std::endl;
   assert(valid_);
   assert(status_.ok());
 
@@ -247,6 +250,7 @@ bool DBIter::SetValueAndColumnsFromEntity(Slice slice) {
 // within the prefix, and the iterator needs to be made invalid, if no
 // more entry for the prefix can be found.
 bool DBIter::FindNextUserEntry(bool skipping_saved_key, const Slice* prefix) {
+  // std::cout << "DBIter FindNextUserEntry" << std::endl;
   PERF_TIMER_GUARD(find_next_user_entry_time);
   return FindNextUserEntryInternal(skipping_saved_key, prefix);
 }
@@ -254,6 +258,7 @@ bool DBIter::FindNextUserEntry(bool skipping_saved_key, const Slice* prefix) {
 // Actual implementation of DBIter::FindNextUserEntry()
 bool DBIter::FindNextUserEntryInternal(bool skipping_saved_key,
                                        const Slice* prefix) {
+  // std::cout << "DBIter FindNextUserEntryInternal" << std::endl;
   // Loop until we hit an acceptable entry to yield
   assert(iter_.Valid());
   assert(status_.ok());
@@ -280,6 +285,7 @@ bool DBIter::FindNextUserEntryInternal(bool skipping_saved_key,
   bool reseek_done = false;
 
   do {
+    // std::cout << "looping" << iter_.Valid() << std::endl;
     // Will update is_key_seqnum_zero_ as soon as we parsed the current key
     // but we need to save the previous value to be used in the loop.
     bool is_prev_key_seqnum_zero = is_key_seqnum_zero_;
@@ -323,6 +329,10 @@ bool DBIter::FindNextUserEntryInternal(bool skipping_saved_key,
                                    : Slice();
     bool more_recent = false;
     if (IsVisible(ikey_.sequence, ts, &more_recent)) {
+
+      //debug
+      // std::cout << "Entering IsVisible" << std::endl;
+
       // If the previous entry is of seqnum 0, the current entry will not
       // possibly be skipped. This condition can potentially be relaxed to
       // prev_key.seq <= ikey_.sequence. We are cautious because it will be more
@@ -330,12 +340,21 @@ bool DBIter::FindNextUserEntryInternal(bool skipping_saved_key,
       // Note that with current timestamp implementation, the same user key can
       // have different timestamps and zero sequence number on the bottommost
       // level. This may change in the future.
+
+      // std::cout << "ikey_.user_key mbr: " << ReadKeyMbr(ikey_.user_key) << std::endl;
+      // std::cout << "CompareKeyForSkip: " << CompareKeyForSkip(ikey_.user_key, saved_key_.GetUserKey()) << std::endl;
+      // std::cout << "saved_key_ mbr: " << ReadKeyMbr(saved_key_.GetUserKey()) << std::endl;
+
       if ((!is_prev_key_seqnum_zero || timestamp_size_ > 0) &&
           skipping_saved_key &&
           CompareKeyForSkip(ikey_.user_key, saved_key_.GetUserKey()) <= 0) {
+        
+        // std::cout << "entering if" << std::endl;
+
         num_skipped++;  // skip this entry
         PERF_COUNTER_ADD(internal_key_skipped_count, 1);
       } else {
+        // std::cout << "entering else" << std::endl;
         assert(!skipping_saved_key ||
                CompareKeyForSkip(ikey_.user_key, saved_key_.GetUserKey()) > 0);
         if (!iter_.PrepareValue()) {
@@ -441,6 +460,9 @@ bool DBIter::FindNextUserEntryInternal(bool skipping_saved_key,
     // TODO(lth): If we reseek to sequence number greater than ikey_.sequence,
     // then it does not make sense to reseek as we would actually land further
     // away from the desired key. There is opportunity for optimization here.
+    std::cout << "num_skipped: " << num_skipped << ", max_skip_: " <<  max_skip_ << std::endl;
+    std::cout << "!reseek_done: " << !reseek_done << std::endl;
+
     if (num_skipped > max_skip_ && !reseek_done) {
       is_key_seqnum_zero_ = false;
       num_skipped = 0;
@@ -484,6 +506,7 @@ bool DBIter::FindNextUserEntryInternal(bool skipping_saved_key,
       iter_.Seek(last_key);
       RecordTick(statistics_, NUMBER_OF_RESEEKS_IN_ITERATION);
     } else {
+      std::cout << "looping else NEXT()" << std::endl;
       iter_.Next();
     }
   } while (iter_.Valid());
