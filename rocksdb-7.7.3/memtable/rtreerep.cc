@@ -238,7 +238,7 @@ MemTableRep::Iterator* RtreeRep::GetIterator(IteratorContext* iterator_context, 
 MemTableRep* RTreeFactory::CreateMemTableRep(
         const MemTableRep::KeyComparator&, Allocator* allocator,
         const SliceTransform*, Logger* /*logger*/) {
-    std::cout << "new memtable" << std::endl;
+    // std::cout << "new memtable" << std::endl;
     return new RtreeRep(allocator);
 }
 
