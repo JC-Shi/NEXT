@@ -125,9 +125,9 @@ int main() {
     options.table_factory.reset(NewBlockBasedTableFactory(block_based_options));
     options.memtable_factory.reset(new rocksdb::SkipListMbrFactory);
 
-
     Status s;
     s = DB::Open(options, kDBPath, &db);
+    std::cout << s.ToString() << std::endl;
     std::cout << "finished open db" << std::endl;
 
     // Failed to open, probably it doesn't exist yet. Try to create it and
@@ -203,7 +203,8 @@ int main() {
         }
     }
     std::string key1 = serialize_key(516, 22.214);
-    s = db->Get(read_options, key1, &value);
+    // s = db->Get(read_options, key1, &value);
+    s = db->SpatialRange(read_options, key1, &value);
     if (s.ok()) {
         std::cout << "value: " << value << std::endl;
     }

@@ -572,6 +572,66 @@ class DB {
     return Get(options, DefaultColumnFamily(), key, value, timestamp);
   }
 
+  // Get all the objects intersecting the spatial range specified in key.
+  // If the column family specified by "column_family" contains an entry for
+  // "key", return the corresponding value in "*value". If the entry is a plain
+  // key-value, return the value as-is; if it is a wide-column entity, return
+  // the value of its default anonymous column (see kDefaultWideColumnName) if
+  // any, or an empty value otherwise.
+  //
+  // If timestamp is enabled and a non-null timestamp pointer is passed in,
+  // timestamp is returned.
+  //
+  // Returns OK on success. Returns NotFound and an empty value in "*value" if
+  // there is no entry for "key". Returns some other non-OK status on error.
+  virtual inline Status SpatialRange(const ReadOptions& options,
+                            ColumnFamilyHandle* column_family, const Slice& key,
+                            std::string* value) {
+    assert(value != nullptr);
+    PinnableSlice pinnable_val(value);
+    assert(!pinnable_val.IsPinned());
+    auto s = SpatialRange(options, column_family, key, &pinnable_val);
+    if (s.ok() && pinnable_val.IsPinned()) {
+      value->assign(pinnable_val.data(), pinnable_val.size());
+    }  // else value is already assigned
+    return s;
+  }
+  virtual Status SpatialRange(const ReadOptions& options,
+                     ColumnFamilyHandle* column_family, const Slice& key,
+                     PinnableSlice* value) {
+    return Get(options, column_family, key, value);
+  }
+  virtual Status SpatialRange(const ReadOptions& options, const Slice& key,
+                     std::string* value) {
+    return SpatialRange(options, DefaultColumnFamily(), key, value);
+  }
+
+  // SpatialRange() methods that return timestamp. Derived DB classes don't need to worry
+  // about this group of methods if they don't care about timestamp feature.
+  virtual inline Status SpatialRange(const ReadOptions& options,
+                            ColumnFamilyHandle* column_family, const Slice& key,
+                            std::string* value, std::string* timestamp) {
+    assert(value != nullptr);
+    PinnableSlice pinnable_val(value);
+    assert(!pinnable_val.IsPinned());
+    auto s = SpatialRange(options, column_family, key, &pinnable_val, timestamp);
+    if (s.ok() && pinnable_val.IsPinned()) {
+      value->assign(pinnable_val.data(), pinnable_val.size());
+    }  // else value is already assigned
+    return s;
+  }
+  virtual Status SpatialRange(const ReadOptions& /*options*/,
+                     ColumnFamilyHandle* /*column_family*/,
+                     const Slice& /*key*/, PinnableSlice* /*value*/,
+                     std::string* /*timestamp*/) {
+    return Status::NotSupported(
+        "SpatialRange() that returns timestamp is not implemented.");
+  }
+  virtual Status SpatialRange(const ReadOptions& options, const Slice& key,
+                     std::string* value, std::string* timestamp) {
+    return SpatialRange(options, DefaultColumnFamily(), key, value, timestamp);
+  }
+
   // If the column family specified by "column_family" contains an entry for
   // "key", return it as a wide-column entity in "*columns". If the entry is a
   // wide-column entity, return it as-is; if it is a plain key-value, return it
