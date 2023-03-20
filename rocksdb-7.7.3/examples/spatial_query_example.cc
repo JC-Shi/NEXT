@@ -122,14 +122,14 @@ int main() {
 
     BlockBasedTableOptions block_based_options;
 
-//    block_based_options.index_type = BlockBasedTableOptions::kRtreeSearch;
+   block_based_options.index_type = BlockBasedTableOptions::kRtreeSearch;
+//    block_based_options.index_type = BlockBasedTableOptions::kTwoLevelIndexSearch;
 //    block_based_options.flush_block_policy_factory.reset(
 //            new NoiseFlushBlockPolicyFactory());
     options.table_factory.reset(NewBlockBasedTableFactory(block_based_options));
     options.memtable_factory.reset(new rocksdb::RTreeFactory);
     // options.memtable_factory.reset(new rocksdb::SkipListMbrFactory);
     options.allow_concurrent_memtable_write = false;
-
 
     Status s;
     s = DB::Open(options, kDBPath, &db);
@@ -146,7 +146,7 @@ int main() {
         // std::cout << "key1: " << key1 << std::endl;
 
         // Put key-value
-        s = db->Put(WriteOptions(), key1, "");
+        s = db->Put(WriteOptions(), key1, "key1");
         assert(s.ok());
 
         std::string key2 = serialize_key(2, 320, 410);
@@ -212,6 +212,14 @@ int main() {
         }
 
     }
+    std::string key1 = serialize_key(516, 22.214);
+    // s = db->Get(read_options, key1, &value);
+    s = db->SpatialRange(read_options, key1, &value);
+    if (s.ok()) {
+        std::cout << "value: " << value << std::endl;
+    }
+
+
 
     // {
     //     iterator_context.query_mbr =

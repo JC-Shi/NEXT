@@ -16,7 +16,7 @@ conn = psycopg2.connect(
 cur = conn.cursor()
 
 queries = open(
-    "/home_nfs/jingyi/lsm/data/query_india_0.001_0.01_test_10000.sql", "r")
+    "/home_nfs/jingyi/lsm/data/query_india_0.01_0.1_test_10000.sql", "r")
 
 query_list = []
 for line in queries:

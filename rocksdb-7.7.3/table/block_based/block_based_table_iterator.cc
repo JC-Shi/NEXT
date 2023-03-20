@@ -12,7 +12,10 @@
 
 namespace ROCKSDB_NAMESPACE {
 
-void BlockBasedTableIterator::SeekToFirst() { SeekImpl(nullptr, false); }
+void BlockBasedTableIterator::SeekToFirst() { 
+  // std::cout << "BlockBasedTableIterator SeekToFirst" << std::endl;
+  SeekImpl(nullptr, false); 
+}
 
 void BlockBasedTableIterator::Seek(const Slice& target) {
   SeekImpl(&target, true);
@@ -201,6 +204,7 @@ void BlockBasedTableIterator::SeekToLast() {
 }
 
 void BlockBasedTableIterator::Next() {
+  // std::cout << "BlockBasedTableIterator Next" << std::endl;
   if (is_at_first_key_from_index_ && !MaterializeCurrentBlock()) {
     return;
   }

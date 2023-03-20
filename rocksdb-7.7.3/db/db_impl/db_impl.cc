@@ -1879,6 +1879,25 @@ Status DBImpl::Get(const ReadOptions& read_options,
   return s;
 }
 
+Status DBImpl::SpatialRange(const ReadOptions& read_options,
+                   ColumnFamilyHandle* column_family, const Slice& key,
+                   PinnableSlice* value) {
+  return SpatialRange(read_options, column_family, key, value, /*timestamp=*/nullptr);
+}
+
+Status DBImpl::SpatialRange(const ReadOptions& read_options,
+                   ColumnFamilyHandle* column_family, const Slice& key,
+                   PinnableSlice* value, std::string* timestamp) {
+  assert(value != nullptr);
+  value->Reset();
+  GetImplOptions get_impl_options;
+  get_impl_options.column_family = column_family;
+  get_impl_options.value = value;
+  get_impl_options.timestamp = timestamp;
+  Status s = GetImpl(read_options, key, get_impl_options);
+  return s;
+}
+
 Status DBImpl::GetEntity(const ReadOptions& read_options,
                          ColumnFamilyHandle* column_family, const Slice& key,
                          PinnableWideColumns* columns) {
