@@ -118,33 +118,36 @@ int main() {
 
     BlockBasedTableOptions block_based_options;
 
-//    block_based_options.index_type = BlockBasedTableOptions::kRtreeSearch;
+   block_based_options.index_type = BlockBasedTableOptions::kRtreeSearch;
+//    block_based_options.index_type = BlockBasedTableOptions::kTwoLevelIndexSearch;
 //    block_based_options.flush_block_policy_factory.reset(
 //            new NoiseFlushBlockPolicyFactory());
     options.table_factory.reset(NewBlockBasedTableFactory(block_based_options));
     options.memtable_factory.reset(new rocksdb::SkipListMbrFactory);
 
-
     Status s;
     s = DB::Open(options, kDBPath, &db);
+    std::cout << s.ToString() << std::endl;
+    std::cout << "finished open db" << std::endl;
 
     // Failed to open, probably it doesn't exist yet. Try to create it and
     // insert data
     if (!s.ok()) {
         options.create_if_missing = true;
         s = DB::Open(options, kDBPath, &db);
+        std::cout << s.code() << " " << s.subcode() << std::endl;
         assert(s.ok());
 
         std::string key1 = serialize_key(516, 22.214);
         std::cout << "key1: " << key1 << std::endl;
 
         // Put key-value
-        s = db->Put(WriteOptions(), key1, "");
+        s = db->Put(WriteOptions(), key1, "key1");
         assert(s.ok());
 
         std::string key2 = serialize_key(1124, 4.1432);
         std::cout << "key2: " << key2 << std::endl;
-        s = db->Put(WriteOptions(), key2, "");
+        s = db->Put(WriteOptions(), key2, "key2");
         assert(s.ok());
     }
 
@@ -199,6 +202,14 @@ int main() {
             std::cout << key.mbr << std::endl;
         }
     }
+    std::string key1 = serialize_key(516, 22.214);
+    // s = db->Get(read_options, key1, &value);
+    s = db->SpatialRange(read_options, key1, &value);
+    if (s.ok()) {
+        std::cout << "value: " << value << std::endl;
+    }
+
+
 
     delete db;
 

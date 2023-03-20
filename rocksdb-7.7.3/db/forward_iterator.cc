@@ -9,6 +9,7 @@
 #include <limits>
 #include <string>
 #include <utility>
+#include <iostream>
 
 #include "db/column_family.h"
 #include "db/db_impl/db_impl.h"
@@ -374,6 +375,7 @@ void ForwardIterator::Seek(const Slice& internal_key) {
 
 void ForwardIterator::SeekInternal(const Slice& internal_key,
                                    bool seek_to_first) {
+  std::cout << "ForwardIterator::SeekInternal" << std::endl;
   assert(mutable_iter_);
   // mutable
   seek_to_first ? mutable_iter_->SeekToFirst() :
@@ -453,7 +455,9 @@ void ForwardIterator::SeekInternal(const Slice& internal_key,
       }
     }
 
+    std::cout << "add files in level > 1" << std::endl;
     for (int32_t level = 1; level < vstorage->num_levels(); ++level) {
+      std::cout << "level: " << level << std::endl;
       const std::vector<FileMetaData*>& level_files =
           vstorage->LevelFiles(level);
       if (level_files.empty()) {

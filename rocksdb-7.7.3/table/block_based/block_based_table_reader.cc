@@ -58,7 +58,7 @@
 #include "table/block_based/hash_index_reader.h"
 #include "table/block_based/partitioned_filter_block.h"
 #include "table/block_based/partitioned_index_reader.h"
-// #include "table/block_based/rtree_index_reader.h"
+#include "table/block_based/rtree_index_reader.h"
 #include "table/block_fetcher.h"
 #include "table/format.h"
 #include "table/get_context.h"
@@ -2027,14 +2027,18 @@ InternalIterator* BlockBasedTable::NewIterator(
     const ReadOptions& read_options, const SliceTransform* prefix_extractor,
     Arena* arena, bool skip_filters, TableReaderCaller caller,
     size_t compaction_readahead_size, bool allow_unprepared_value) {
+  // std::cout << "start BlockBasedTable NewIterator" << std::endl;
+  // std::cout << "BlockBasedTable::NewIterator iterator context is nullptr: " << (read_options.iterator_context == nullptr) << std::endl;
   BlockCacheLookupContext lookup_context{caller};
   bool need_upper_bound_check =
       read_options.auto_prefix_mode || PrefixExtractorChanged(prefix_extractor);
+  // std::cout << "start creating new index iterator" << std::endl;
   std::unique_ptr<InternalIteratorBase<IndexValue>> index_iter(NewIndexIterator(
       read_options,
       /*disable_prefix_seek=*/need_upper_bound_check &&
           rep_->index_type == BlockBasedTableOptions::kHashSearch,
       /*input_iter=*/nullptr, /*get_context=*/nullptr, &lookup_context));
+  // std::cout << "finish creating new index iterator" << std::endl;
   if (arena == nullptr) {
     return new BlockBasedTableIterator(
         this, read_options, rep_->internal_comparator, std::move(index_iter),
@@ -2051,6 +2055,7 @@ InternalIterator* BlockBasedTable::NewIterator(
         need_upper_bound_check, prefix_extractor, caller,
         compaction_readahead_size, allow_unprepared_value);
   }
+  // std::cout << "finish BlockBasedTable NewIterator" << std::endl;
 }
 
 FragmentedRangeTombstoneIterator* BlockBasedTable::NewRangeTombstoneIterator(
@@ -2194,6 +2199,7 @@ Status BlockBasedTable::Get(const ReadOptions& read_options, const Slice& key,
                             GetContext* get_context,
                             const SliceTransform* prefix_extractor,
                             bool skip_filters) {
+  // std::cout << "BlockBasedTable::Get" << std::endl;
   assert(key.size() >= 8);  // key must be internal key
   assert(get_context != nullptr);
   Status s;
@@ -2242,6 +2248,7 @@ Status BlockBasedTable::Get(const ReadOptions& read_options, const Slice& key,
         rep_->internal_comparator.user_comparator()->timestamp_size();
     bool matched = false;  // if such user key matched a key in SST
     bool done = false;
+    // std::cout << "Index Iterator Seek" << std::endl;
     for (iiter->Seek(key); iiter->Valid() && !done; iiter->Next()) {
       IndexValue v = iiter->value();
 
@@ -2648,6 +2655,7 @@ Status BlockBasedTable::CreateIndexReader(
     InternalIterator* meta_iter, bool use_cache, bool prefetch, bool pin,
     BlockCacheLookupContext* lookup_context,
     std::unique_ptr<IndexReader>* index_reader) {
+  // std::cout << "start CreateIndexReader" << std::endl;
   switch (rep_->index_type) {
     case BlockBasedTableOptions::kTwoLevelIndexSearch: {
       return PartitionIndexReader::Create(this, ro, prefetch_buffer, use_cache,
@@ -2675,10 +2683,14 @@ Status BlockBasedTable::CreateIndexReader(
                                        index_reader);
       }
     }
-    // case BlockBasedTableOptions::kRtreeSearch: {
-    //   return RtreeIndexReader::Create(this, ro, prefetch_buffer, use_cache,
-    //                                   prefetch, pin, lookup_context, index_reader);
-    // }
+    case BlockBasedTableOptions::kRtreeSearch: {
+      return RtreeIndexReader::Create(this, ro, prefetch_buffer, meta_iter,
+                                          use_cache, prefetch, pin, lookup_context,
+                                          index_reader);
+      // return PartitionIndexReader::Create(this, ro, prefetch_buffer, use_cache,
+      //                                     prefetch, pin, lookup_context,
+      //                                     index_reader);
+    }
     default: {
       std::string error_message =
           "Unrecognized index type: " + std::to_string(rep_->index_type);

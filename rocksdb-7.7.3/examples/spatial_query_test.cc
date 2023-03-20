@@ -113,9 +113,7 @@ int main(int argc, char* argv[]) {
     // Set the block cache to 64 MB
     block_based_options.block_cache = rocksdb::NewLRUCache(64 * 1024 * 1024);
 
-    block_based_options.index_type = BlockBasedTableOptions::kRtreeSearch;
-    block_based_options.cache_index_and_filter_blocks = true;
-    block_based_options.pin_top_level_index_and_filter = true;
+//    block_based_options.index_type = BlockBasedTableOptions::kRtreeSearch;
 //    block_based_options.flush_block_policy_factory.reset(
 //            new NoiseFlushBlockPolicyFactory());
     options.table_factory.reset(NewBlockBasedTableFactory(block_based_options));
@@ -152,13 +150,16 @@ int main(int argc, char* argv[]) {
         read_options.iterator_context = &iterator_context;
         std::unique_ptr <rocksdb::Iterator> it(db->NewIterator(read_options));
 
+        int counter = 0;
         // Iterate over the results and print the value
         for (it->SeekToFirst(); it->Valid(); it->Next()) {
             Key key = deserialize_key(it->key());
+            counter++;
         }
         auto end = std::chrono::high_resolution_clock::now(); 
         auto duration = std::chrono::duration_cast<std::chrono::nanoseconds>(end - start);
         totalDuration = totalDuration + duration;
+        std::cout << "Total number of results: " << counter << std::endl;
     }
     std::cout << "Execution time: " << totalDuration.count() << " nanoseconds" << std::endl;
 

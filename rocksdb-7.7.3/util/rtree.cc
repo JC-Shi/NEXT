@@ -62,4 +62,21 @@ namespace rocksdb {
         return mbr;
     }
 
+    std::string serializeMbr(const Mbr& mbr) {
+        std::string serialized;
+        serialized.append(reinterpret_cast<const char*>(&mbr.iid.min),
+                        sizeof(uint64_t));
+        serialized.append(reinterpret_cast<const char*>(&mbr.iid.max),
+                        sizeof(uint64_t));
+        serialized.append(reinterpret_cast<const char*>(&mbr.first.min),
+                        sizeof(double));
+        serialized.append(reinterpret_cast<const char*>(&mbr.first.max),
+                        sizeof(double));
+        serialized.append(reinterpret_cast<const char*>(&mbr.second.min),
+                        sizeof(double));
+        serialized.append(reinterpret_cast<const char*>(&mbr.second.max),
+                        sizeof(double));
+        return serialized;
+  }
+
 }  // namespace rocksdb

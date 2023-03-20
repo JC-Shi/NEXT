@@ -3,7 +3,7 @@ import numpy as np
 import csv
 
 n_queries = 10000
-window_size = 'india_0.001_0.01_test'
+window_size = 'india_0.01_0.1_test'
 queryFile = '/home_nfs/jingyi/lsm/data/query_{}_{}'.format(window_size, n_queries)
 
 resultList = []
