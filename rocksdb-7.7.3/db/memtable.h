@@ -280,6 +280,27 @@ class MemTable {
                callback, is_blob_index, do_merge);
   }
 
+  bool SpatialRange(const LookupKey& key, std::string* value,
+           PinnableWideColumns* columns, std::string* timestamp, Status* s,
+           MergeContext* merge_context,
+           SequenceNumber* max_covering_tombstone_seq, SequenceNumber* seq,
+           const ReadOptions& read_opts, bool immutable_memtable,
+           ReadCallback* callback = nullptr, bool* is_blob_index = nullptr,
+           bool do_merge = true);
+
+  bool SpatialRange(const LookupKey& key, std::string* value,
+           PinnableWideColumns* columns, std::string* timestamp, Status* s,
+           MergeContext* merge_context,
+           SequenceNumber* max_covering_tombstone_seq,
+           const ReadOptions& read_opts, bool immutable_memtable,
+           ReadCallback* callback = nullptr, bool* is_blob_index = nullptr,
+           bool do_merge = true) {
+    SequenceNumber seq;
+    return SpatialRange(key, value, columns, timestamp, s, merge_context,
+               max_covering_tombstone_seq, &seq, read_opts, immutable_memtable,
+               callback, is_blob_index, do_merge);
+  }
+
   // @param immutable_memtable Whether this memtable is immutable. Used
   // internally by NewRangeTombstoneIterator(). See comment above
   // NewRangeTombstoneIterator() for more detail.
@@ -629,6 +650,14 @@ class MemTable {
   void UpdateOldestKeyTime();
 
   void GetFromTable(const LookupKey& key,
+                    SequenceNumber max_covering_tombstone_seq, bool do_merge,
+                    ReadCallback* callback, bool* is_blob_index,
+                    std::string* value, PinnableWideColumns* columns,
+                    std::string* timestamp, Status* s,
+                    MergeContext* merge_context, SequenceNumber* seq,
+                    bool* found_final_value, bool* merge_in_progress);
+
+  void SpatialRangeFromTable(const LookupKey& key,
                     SequenceNumber max_covering_tombstone_seq, bool do_merge,
                     ReadCallback* callback, bool* is_blob_index,
                     std::string* value, PinnableWideColumns* columns,

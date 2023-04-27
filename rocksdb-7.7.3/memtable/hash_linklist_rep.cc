@@ -180,6 +180,13 @@ class HashLinkListRep : public MemTableRep {
   void Get(const LookupKey& k, void* callback_args,
            bool (*callback_func)(void* arg, const char* entry)) override;
 
+  void SpatialRange(const LookupKey& k, void* callback_args,
+           bool (*callback_func)(void* arg, const char* entry)) override {
+            (void) k;
+            (void) callback_args;
+            (void) callback_func;
+           };
+
   ~HashLinkListRep() override;
 
   virtual MemTableRep::Iterator* GetIterator(IteratorContext* iterator_context = nullptr,

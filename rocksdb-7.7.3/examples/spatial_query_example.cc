@@ -21,7 +21,7 @@
 
 using namespace rocksdb;
 
-std::string kDBPath = "/tmp/test_db";
+std::string kDBPath = "/tmp/test_db1";
 
 std::string serialize_key(uint64_t iid, double xValue, double yValue) {
     std::string key;
@@ -33,6 +33,7 @@ std::string serialize_key(uint64_t iid, double xValue, double yValue) {
     key.append(reinterpret_cast<const char*>(&yValue), sizeof(double));
     return key;
 }
+
 
 std::string serialize_query(uint64_t iid_min,
                             uint64_t iid_max, double x_value_min,
@@ -90,16 +91,16 @@ public:
         const uint64_t* value_a = reinterpret_cast<const uint64_t*>(slice_a.data());
         const uint64_t* value_b = reinterpret_cast<const uint64_t*>(slice_b.data());
 
-        // if (*value_a < *value_b) {
-        //     return -1;
-        // } else if (*value_a > *value_b) {
-        //     return 1;
-        // } else {
-        //     return 0;
-        // }
+        if (*value_a < *value_b) {
+            return -1;
+        } else if (*value_a > *value_b) {
+            return 1;
+        } else {
+            return 0;
+        }
 
         // Specifically for R-tree as r-tree does not implement ordering
-        return 1;
+        // return 1;
     }
 
     void FindShortestSeparator(std::string* start,
@@ -127,8 +128,8 @@ int main() {
 //    block_based_options.flush_block_policy_factory.reset(
 //            new NoiseFlushBlockPolicyFactory());
     options.table_factory.reset(NewBlockBasedTableFactory(block_based_options));
-    options.memtable_factory.reset(new rocksdb::RTreeFactory);
-    // options.memtable_factory.reset(new rocksdb::SkipListMbrFactory);
+    // options.memtable_factory.reset(new rocksdb::RTreeFactory);
+    options.memtable_factory.reset(new rocksdb::SkipListMbrFactory);
     options.allow_concurrent_memtable_write = false;
 
     Status s;
@@ -180,41 +181,43 @@ int main() {
 
     // This scope is needed so that the unique pointer of the iterator runs
     // out of scope and cleans up things correctly
-    {
-        iterator_context.query_mbr =
-                serialize_query(0,5, 0, 100, 0, 1000000);
-        read_options.iterator_context = &iterator_context;
-        std::unique_ptr <rocksdb::Iterator> it(db->NewIterator(read_options));
+    // {
+    //     iterator_context.query_mbr =
+    //             serialize_query(0,5, 0, 100, 0, 1000000);
+    //     read_options.iterator_context = &iterator_context;
+    //     std::unique_ptr <rocksdb::Iterator> it(db->NewIterator(read_options));
 
-        // std::cout << it->Valid() <<std::endl;
+    //     // std::cout << it->Valid() <<std::endl;
 
-        std::cout << "query 1" << std::endl;
-        // Iterate over the results and print the value
+    //     std::cout << "query 1" << std::endl;
+    //     // Iterate over the results and print the value
         
-        // it->SeekToFirst();
+    //     // it->SeekToFirst();
 
-        // Key key = deserialize_key(it->key());
-        // std::cout << "Results: " << key.mbr << std::endl;
-        // it->Next();
-        // std::cout << "Valid(): " << it->Valid() << std::endl;
+    //     // Key key = deserialize_key(it->key());
+    //     // std::cout << "Results: " << key.mbr << std::endl;
+    //     // it->Next();
+    //     // std::cout << "Valid(): " << it->Valid() << std::endl;
 
-        // Key key2 = deserialize_key(it->key());
-        // std::cout << "Results: " << key2.mbr << std::endl;
-        // it->Next();
-        // std::cout << "Valid(): " << it->Valid() << std::endl;
+    //     // Key key2 = deserialize_key(it->key());
+    //     // std::cout << "Results: " << key2.mbr << std::endl;
+    //     // it->Next();
+    //     // std::cout << "Valid(): " << it->Valid() << std::endl;
 
 
 
-        for (it->SeekToFirst(); it->Valid(); it->Next()) {
-            // std::cout << "enter loop" << std::endl;
-            Key key = deserialize_key(it->key());
-            std::cout << "Results: " << key.mbr << std::endl;
-        }
+    //     // for (it->SeekToFirst(); it->Valid(); it->Next()) {
+    //     //     // std::cout << "enter loop" << std::endl;
+    //     //     Key key = deserialize_key(it->key());
+    //     //     std::cout << "Results: " << key.mbr << std::endl;
+    //     // }
 
-    }
-    std::string key1 = serialize_key(516, 22.214);
+    // }
+    std::string key1 = serialize_key(1, 110, 210);
     // s = db->Get(read_options, key1, &value);
+    // std::cout<< s.ToString() << std::endl;
     s = db->SpatialRange(read_options, key1, &value);
+    std::cout<< s.ToString() << std::endl;
     if (s.ok()) {
         std::cout << "value: " << value << std::endl;
     }
