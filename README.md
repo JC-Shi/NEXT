@@ -8,7 +8,7 @@ make static_lib
 
 To run spatial query example
 ```
-cd example
+cd examples
 make spatial_query_example
 ./spatial_query_example
 ```
