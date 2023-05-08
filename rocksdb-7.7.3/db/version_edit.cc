@@ -58,6 +58,12 @@ Status FileMetaData::UpdateBoundaries(const Slice& key, const Slice& value,
   fd.smallest_seqno = std::min(fd.smallest_seqno, seqno);
   fd.largest_seqno = std::max(fd.largest_seqno, seqno);
 
+  // update mbr 
+  InternalKey key_temp;
+  key_temp.DecodeFrom(key);
+  Mbr key_mbr = ReadKeyMbr(key_temp.user_key());
+  expandMbr(mbr, key_mbr);
+
   return Status::OK();
 }
 

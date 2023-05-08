@@ -368,13 +368,13 @@ class SkipListMbrRep : public SkipListRep {
         }
 
         virtual void Next() override {
-            std::cout << "SkipListRep::Next()" << std::endl;
+            // std::cout << "SkipListRep::Next()" << std::endl;
             SkipListRep::Iterator::Next();
             NextIfDisjoint();
         }
 
         virtual void SeekToFirst() override {
-            std::cout << "SkipListRep::SeekToFirst()" << std::endl;
+            // std::cout << "SkipListRep::SeekToFirst()" << std::endl;
             SkipListRep::Iterator::SeekToFirst();
             NextIfDisjoint();
         }

@@ -120,6 +120,8 @@ int main() {
     NoiseComparator cmp;
     options.comparator = &cmp;
 
+    options.info_log_level = DEBUG_LEVEL;
+
     BlockBasedTableOptions block_based_options;
 
    block_based_options.index_type = BlockBasedTableOptions::kRtreeSearch;
@@ -127,8 +129,8 @@ int main() {
 //    block_based_options.flush_block_policy_factory.reset(
 //            new NoiseFlushBlockPolicyFactory());
     options.table_factory.reset(NewBlockBasedTableFactory(block_based_options));
-    // options.memtable_factory.reset(new rocksdb::RTreeFactory);
-    options.memtable_factory.reset(new rocksdb::SkipListMbrFactory);
+    options.memtable_factory.reset(new rocksdb::RTreeFactory);
+    // options.memtable_factory.reset(new rocksdb::SkipListMbrFactory);
     options.allow_concurrent_memtable_write = false;
 
     Status s;

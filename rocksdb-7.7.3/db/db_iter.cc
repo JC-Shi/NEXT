@@ -460,8 +460,8 @@ bool DBIter::FindNextUserEntryInternal(bool skipping_saved_key,
     // TODO(lth): If we reseek to sequence number greater than ikey_.sequence,
     // then it does not make sense to reseek as we would actually land further
     // away from the desired key. There is opportunity for optimization here.
-    std::cout << "num_skipped: " << num_skipped << ", max_skip_: " <<  max_skip_ << std::endl;
-    std::cout << "!reseek_done: " << !reseek_done << std::endl;
+    // std::cout << "num_skipped: " << num_skipped << ", max_skip_: " <<  max_skip_ << std::endl;
+    // std::cout << "!reseek_done: " << !reseek_done << std::endl;
 
     if (num_skipped > max_skip_ && !reseek_done) {
       is_key_seqnum_zero_ = false;
@@ -506,7 +506,7 @@ bool DBIter::FindNextUserEntryInternal(bool skipping_saved_key,
       iter_.Seek(last_key);
       RecordTick(statistics_, NUMBER_OF_RESEEKS_IN_ITERATION);
     } else {
-      std::cout << "looping else NEXT()" << std::endl;
+      // std::cout << "looping else NEXT()" << std::endl;
       iter_.Next();
     }
   } while (iter_.Valid());

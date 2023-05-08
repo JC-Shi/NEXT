@@ -25,6 +25,7 @@
 #include "table/table_reader.h"
 #include "table/unique_id_impl.h"
 #include "util/autovector.h"
+#include "util/rtree.h"
 
 namespace ROCKSDB_NAMESPACE {
 
@@ -168,6 +169,8 @@ struct FileMetaData {
   FileDescriptor fd;
   InternalKey smallest;            // Smallest internal key served by table
   InternalKey largest;             // Largest internal key served by table
+
+  Mbr mbr;                         // MBR of the SST file
 
   // Needs to be disposed when refs becomes 0.
   Cache::Handle* table_reader_handle = nullptr;

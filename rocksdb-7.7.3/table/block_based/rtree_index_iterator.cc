@@ -1,4 +1,7 @@
 #include "table/block_based/rtree_index_iterator.h"
+#include "logging/event_logger.h"
+#include "logging/log_buffer.h"
+#include "logging/logging.h"
 
 #include <iostream>
 
@@ -22,6 +25,7 @@ void RtreeIndexIterator::SeekImpl(const Slice* target) {
   }
 
   index_iter_->SeekToFirst();
+  ROCKS_LOG_DEBUG(table_->get_rep()->ioptions.logger, "top level index first entry mbr:  %s \n", ReadQueryMbr(index_iter_->key()).toString().c_str());
   // std::cout << "top level index first entry mbr: " << ReadQueryMbr(index_iter_->key()) << std::endl;
   // std::cout << "index_iter_valid(): " << index_iter_->Valid() << " not intersect: " << (!IntersectMbr(ReadQueryMbr(index_iter_->key()), query_mbr_)) << std::endl;
   while (index_iter_->Valid() && !IntersectMbr(ReadQueryMbr(index_iter_->key()), query_mbr_)) {
