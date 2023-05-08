@@ -98,8 +98,16 @@ public:
         } else {
             return 0;
         }
+        if (*value_a < *value_b) {
+            return -1;
+        } else if (*value_a > *value_b) {
+            return 1;
+        } else {
+            return 0;
+        }
 
         // Specifically for R-tree as r-tree does not implement ordering
+        // return 1;
         // return 1;
     }
 
@@ -120,6 +128,8 @@ int main() {
 
     NoiseComparator cmp;
     options.comparator = &cmp;
+
+    options.info_log_level = DEBUG_LEVEL;
 
     BlockBasedTableOptions block_based_options;
 
@@ -153,6 +163,7 @@ int main() {
         std::string key2 = serialize_key(2, 320, 410);
         // std::cout << "key2: " << key2 << std::endl;
         s = db->Put(WriteOptions(), key2, "");
+        std::cout << s.ToString() << std::endl;
         assert(s.ok());
 
         std::string key3 = serialize_key(3, 5, 6);
@@ -212,12 +223,18 @@ int main() {
     //     //     std::cout << "Results: " << key.mbr << std::endl;
     //     // }
 
-    // }
-    std::string key1 = serialize_key(1, 110, 210);
+    }
+    std::string key1 = serialize_key(3, 5, 6);
     // s = db->Get(read_options, key1, &value);
     // std::cout<< s.ToString() << std::endl;
     s = db->SpatialRange(read_options, key1, &value);
-    std::cout<< s.ToString() << std::endl;
+    std::cout << s.ToString() << std::endl;
+    if (s.ok()) {
+        std::cout << "value: " << value << std::endl;
+    }
+
+    s = db->Get(read_options, key1, &value);
+    std::cout << s.ToString() << std::endl;
     if (s.ok()) {
         std::cout << "value: " << value << std::endl;
     }

@@ -77,6 +77,31 @@ namespace rocksdb {
         serialized.append(reinterpret_cast<const char*>(&mbr.second.max),
                         sizeof(double));
         return serialized;
+    }
+
+    void expandMbr(Mbr& to_expand, Mbr expander) {
+        if (to_expand.empty()) {
+            to_expand = expander;
+        } else {
+            if (expander.iid.min < to_expand.iid.min) {
+                to_expand.iid.min = expander.iid.min;
+            }
+            if (expander.iid.max > to_expand.iid.max) {
+                to_expand.iid.max = expander.iid.max;
+            }
+            if (expander.first.min < to_expand.first.min) {
+                to_expand.first.min = expander.first.min;
+            }
+            if (expander.first.max > to_expand.first.max) {
+                to_expand.first.max = expander.first.max;
+            }
+            if (expander.second.min < to_expand.second.min) {
+                to_expand.second.min = expander.second.min;
+            }
+            if (expander.second.max > to_expand.second.max) {
+                to_expand.second.max = expander.second.max;
+            }
+        }
   }
 
 }  // namespace rocksdb

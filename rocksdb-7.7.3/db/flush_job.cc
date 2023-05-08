@@ -1006,6 +1006,8 @@ Status FlushJob::WriteLevel0Table() {
                    meta_.oldest_blob_file_number, meta_.oldest_ancester_time,
                    meta_.file_creation_time, meta_.file_checksum,
                    meta_.file_checksum_func_name, meta_.unique_id);
+    
+    ROCKS_LOG_DEBUG(db_options_.info_log, "Flushed T0 SST File, mbr: %s \n", meta_.mbr.toString().c_str());
 
     edit_->SetBlobFileAdditions(std::move(blob_file_additions));
   }

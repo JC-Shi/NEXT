@@ -111,24 +111,27 @@ int main(int argc, char* argv[]) {
     NoiseComparator cmp;
     options.comparator = &cmp;
 
+    options.info_log_level = DEBUG_LEVEL;
+    options.statistics = rocksdb::CreateDBStatistics();
+
     BlockBasedTableOptions block_based_options;
 
     // Set the block cache to 64 MB
     block_based_options.block_cache = rocksdb::NewLRUCache(64 * 1024 * 1024);
-   block_based_options.index_type = BlockBasedTableOptions::kRtreeSearch;
+    block_based_options.index_type = BlockBasedTableOptions::kRtreeSearch;
 //    block_based_options.flush_block_policy_factory.reset(
 //            new NoiseFlushBlockPolicyFactory());
     options.table_factory.reset(NewBlockBasedTableFactory(block_based_options));
-    // options.memtable_factory.reset(new rocksdb::SkipListMbrFactory);
-    options.memtable_factory.reset(new rocksdb::RTreeFactory);
-    options.allow_concurrent_memtable_write = false;
+    options.memtable_factory.reset(new rocksdb::SkipListMbrFactory);
+    // options.memtable_factory.reset(new rocksdb::RTreeFactory);
+    // options.allow_concurrent_memtable_write = false;
 
     // Set the write buffer size to 64 MB
     options.write_buffer_size = 64 * 1024 * 1024;
 
     // options.level0_file_num_compaction_trigger = 10;
     // options.max_bytes_for_level_base = 512 * 1024 * 1024;
-    options.check_flush_compaction_key_order = false;
+    // options.check_flush_compaction_key_order = false;
 
     Status s;
     s = DB::Open(options, kDBPath, &db);
@@ -151,9 +154,9 @@ int main(int argc, char* argv[]) {
         std::chrono::nanoseconds totalDuration{0};
         for (int i = 0; i < dataSize; i++){
             dataFile >> op >> id >> low[0] >> low[1] >> high[0] >> high[1];
-            // if (i == 0) {
-            //     std::cout << op << id << low[0] << low[1] << high[0] << high[1];
-            // }
+            if (i < 50) {
+                std::cout << op << " " << id << " " << low[0] << " " << low[1] << " " << high[0] << " " << high[1] << std::endl;
+            }
 
             std::string key = serialize_key(id, low[0], low[1]);
 
@@ -173,6 +176,10 @@ int main(int argc, char* argv[]) {
         std::cout << "end writing data" << std::endl;
         std::cout << "Execution time: " << totalDuration.count() << " nanoseconds" << std::endl;
 
+        db->Close();
+
+        // std::cout << "RocksDB stats: " << options.statistics->ToString() << std::endl;
+
         // std::string key1 = serialize_key(keypath, 516, 22.214);
         // std::cout << "key1: " << key1 << std::endl;
 
@@ -186,7 +193,14 @@ int main(int argc, char* argv[]) {
         // assert(s.ok());
     }
 
+
     delete db;
+
+    s = DB::Open(options, kDBPath, &db);
+    s = db->Close();
+
+    std::cout << "RocksDB stats: " << options.statistics->ToString() << std::endl;
+
 
     return 0;
 }

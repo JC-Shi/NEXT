@@ -7,6 +7,7 @@
 
 #pragma once
 #include <ostream>
+#include <sstream>
 
 #include "rocksdb/options.h"
 
@@ -50,6 +51,12 @@ namespace rocksdb {
                                         const IntInterval& interval) {
             return os << "[" << interval.min << "," << interval.max << "]";
         };
+        
+        std::string toString() const {
+            std::stringstream ss;
+            ss << (*this);
+            return ss.str();
+        }
     };
 
     class Mbr {
@@ -83,6 +90,12 @@ namespace rocksdb {
             return os << "[" << mbr.iid << "," << mbr.first << "," << mbr.second << "]";
         };
 
+        std::string toString() const {
+            std::stringstream ss;
+            ss << (*this);
+            return ss.str();
+        }
+
         IntInterval iid;
         Interval first;
         Interval second;
@@ -114,5 +127,6 @@ namespace rocksdb {
     // Reads the mbr (intervals) from the key. It modifies the key slice.
     extern Mbr ReadQueryMbr(Slice data);
     extern std::string serializeMbr(const Mbr& mbr);
+    extern void expandMbr(Mbr& to_expand, Mbr expander);
 
 }  // namespace rocksdb
