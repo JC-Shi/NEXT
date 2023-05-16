@@ -14,6 +14,7 @@
 #include "rocksdb/table.h"
 #include "util/coding.h"
 #include "util/rtree.h"
+#include "util/hilbert_curve.h"
 
 
 using namespace rocksdb;
@@ -77,15 +78,15 @@ public:
         const uint64_t* value_a = reinterpret_cast<const uint64_t*>(slice_a.data());
         const uint64_t* value_b = reinterpret_cast<const uint64_t*>(slice_b.data());
 
-        // if (*value_a < *value_b) {
-        //     return -1;
-        // } else if (*value_a > *value_b) {
-        //     return 1;
-        // } else {
-        //     return 0;
-        // }
+        if (*value_a < *value_b) {
+            return -1;
+        } else if (*value_a > *value_b) {
+            return 1;
+        } else {
+            return 0;
+        }
 
-        return 1;
+        // return 1;
     }
 
     void FindShortestSeparator(std::string* start,
@@ -107,7 +108,7 @@ int main(int argc, char* argv[]) {
     DB* db;
     Options options;
 
-    NoiseComparator cmp;
+    HilbertComparator cmp;
     options.comparator = &cmp;
 
     options.info_log_level = DEBUG_LEVEL;

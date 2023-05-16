@@ -15,6 +15,7 @@
 
 #include "db/version_edit.h"
 #include "logging/log_buffer.h"
+#include "logging/logging.h"
 #include "test_util/sync_point.h"
 
 namespace ROCKSDB_NAMESPACE {
@@ -731,7 +732,7 @@ bool LevelCompactionBuilder::PickFileToCompact() {
       }
       continue;
     }
-
+    ROCKS_LOG_DEBUG(ioptions_.logger, "Pick File to compact with MBR: %s", f->mbr.toString().c_str());
     start_level_inputs_.files.push_back(f);
     if (!compaction_picker_->ExpandInputsToCleanCut(cf_name_, vstorage_,
                                                     &start_level_inputs_) ||
@@ -759,6 +760,10 @@ bool LevelCompactionBuilder::PickFileToCompact() {
     output_level_inputs.level = output_level_;
     vstorage_->GetOverlappingInputs(output_level_, &smallest, &largest,
                                     &output_level_inputs.files);
+    ROCKS_LOG_DEBUG(ioptions_.logger, "List of overlapping files at the next level: \n");
+    for (auto file:output_level_inputs.files) {
+        ROCKS_LOG_DEBUG(ioptions_.logger, "File MBR: %s\n", file->mbr.toString().c_str());
+    }
     if (output_level_inputs.empty()) {
       if (TryExtendNonL0TrivialMove(index)) {
         break;
