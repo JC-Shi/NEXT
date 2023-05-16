@@ -113,6 +113,8 @@ int main(int argc, char* argv[]) {
 
     options.info_log_level = DEBUG_LEVEL;
     options.statistics = rocksdb::CreateDBStatistics();
+    options.compaction_pri = kMaxMbr;
+    std::cout << "compatction_pri = " << options.compaction_pri << std::endl;
 
     BlockBasedTableOptions block_based_options;
 

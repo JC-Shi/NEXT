@@ -9,6 +9,7 @@
 
 #include "db/version_set.h"
 
+#include <iostream>
 #include <algorithm>
 #include <array>
 #include <cinttypes>
@@ -3860,6 +3861,32 @@ void VersionStorageInfo::UpdateFilesByCompactionPri(
         SortFileByRoundRobin(*internal_comparator_, &compact_cursor_,
                              level0_non_overlapping_, level, &temp);
         break;
+      case kMinMbr:
+        std::sort(temp.begin(), temp.end(),
+                  [](const Fsize& f1, const Fsize& f2) -> bool {
+
+                    Mbr f1_mbr = f1.file->mbr;
+                    double f1_mbr_area = (f1_mbr.first.max - f1_mbr.first.min) * (f1_mbr.second.max - f1_mbr.second.min);
+                    Mbr f2_mbr = f2.file->mbr;
+                    double f2_mbr_area = (f2_mbr.first.max - f2_mbr.first.min) * (f2_mbr.second.max - f2_mbr.second.min);
+                    
+                    return f1_mbr_area <
+                           f2_mbr_area;
+                  });
+        break;
+      case kMaxMbr:
+        std::sort(temp.begin(), temp.end(),
+                  [](const Fsize& f1, const Fsize& f2) -> bool {
+
+                    Mbr f1_mbr = f1.file->mbr;
+                    double f1_mbr_area = (f1_mbr.first.max - f1_mbr.first.min) * (f1_mbr.second.max - f1_mbr.second.min);
+                    Mbr f2_mbr = f2.file->mbr;
+                    double f2_mbr_area = (f2_mbr.first.max - f2_mbr.first.min) * (f2_mbr.second.max - f2_mbr.second.min);
+                    
+                    return f1_mbr_area >
+                           f2_mbr_area;
+                  });
+        break;        
       default:
         assert(false);
     }
