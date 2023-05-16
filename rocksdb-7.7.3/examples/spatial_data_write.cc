@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <cstdio>
 #include <string>
 #include <fstream>
@@ -5,6 +6,7 @@
 #include <sstream>
 #include <vector>
 #include <chrono>
+#include <math.h>
 
 #include "rocksdb/db.h"
 #include "rocksdb/flush_block_policy.h"
@@ -14,6 +16,7 @@
 #include "rocksdb/table.h"
 #include "util/coding.h"
 #include "util/rtree.h"
+#include "util/hilbert_curve.h"
 
 
 using namespace rocksdb;
@@ -108,7 +111,7 @@ int main(int argc, char* argv[]) {
     DB* db;
     Options options;
 
-    NoiseComparator cmp;
+    HilbertComparator cmp;
     options.comparator = &cmp;
 
     options.info_log_level = DEBUG_LEVEL;
@@ -156,9 +159,9 @@ int main(int argc, char* argv[]) {
         std::chrono::nanoseconds totalDuration{0};
         for (int i = 0; i < dataSize; i++){
             dataFile >> op >> id >> low[0] >> low[1] >> high[0] >> high[1];
-            if (i < 50) {
-                std::cout << op << " " << id << " " << low[0] << " " << low[1] << " " << high[0] << " " << high[1] << std::endl;
-            }
+            // if (i < 50) {
+            //     std::cout << op << " " << id << " " << low[0] << " " << low[1] << " " << high[0] << " " << high[1] << std::endl;
+            // }
 
             std::string key = serialize_key(id, low[0], low[1]);
 

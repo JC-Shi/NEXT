@@ -17,6 +17,7 @@
 #include "rocksdb/table.h"
 #include "util/coding.h"
 #include "util/rtree.h"
+#include "util/hilbert_curve.h"
 
 
 using namespace rocksdb;
@@ -28,8 +29,8 @@ std::string serialize_key(uint64_t iid, double xValue, double yValue) {
     // The R-tree stores boxes, hence duplicate the input values
     key.append(reinterpret_cast<const char*>(&iid), sizeof(uint64_t));
     key.append(reinterpret_cast<const char*>(&xValue), sizeof(double));
-    key.append(reinterpret_cast<const char*>(&yValue), sizeof(double));
     key.append(reinterpret_cast<const char*>(&xValue), sizeof(double));
+    key.append(reinterpret_cast<const char*>(&yValue), sizeof(double));
     key.append(reinterpret_cast<const char*>(&yValue), sizeof(double));
     return key;
 }
@@ -126,7 +127,7 @@ int main() {
     DB* db;
     Options options;
 
-    NoiseComparator cmp;
+    HilbertComparator cmp;
     options.comparator = &cmp;
 
     options.info_log_level = DEBUG_LEVEL;
@@ -140,7 +141,7 @@ int main() {
     options.table_factory.reset(NewBlockBasedTableFactory(block_based_options));
     // options.memtable_factory.reset(new rocksdb::RTreeFactory);
     options.memtable_factory.reset(new rocksdb::SkipListMbrFactory);
-    options.allow_concurrent_memtable_write = false;
+    // options.allow_concurrent_memtable_write = false;
 
     Status s;
     s = DB::Open(options, kDBPath, &db);
@@ -153,33 +154,36 @@ int main() {
         std::cout << "Create if missing: " << s.ToString() << std::endl;
         assert(s.ok());
 
-        std::string key1 = serialize_key(1, 110, 210);
+        std::string key1 = serialize_key(1, 18.6598102, 73.4636206);
         // std::cout << "key1: " << key1 << std::endl;
 
         // Put key-value
         s = db->Put(WriteOptions(), key1, "key1");
         assert(s.ok());
 
-        std::string key2 = serialize_key(2, 320, 410);
+        std::string key2 = serialize_key(2, 10.3234002, 76.1851883);
         // std::cout << "key2: " << key2 << std::endl;
         s = db->Put(WriteOptions(), key2, "");
         std::cout << s.ToString() << std::endl;
         assert(s.ok());
 
-        std::string key3 = serialize_key(3, 5, 6);
+        std::string key3 = serialize_key(3, 25.0465603, 82.9407812);
         // std::cout << "key3: " << key3 << std::endl;
         s = db->Put(WriteOptions(), key3, "");
         assert(s.ok());
 
-        std::string key4 = serialize_key(4, 17, 58);
+        std::string key4 = serialize_key(4, 16.7832288, 77.3759338);
         // std::cout << "key4: " << key4 << std::endl;
         s = db->Put(WriteOptions(), key4, "");
+        std::cout << s.ToString() << std::endl;
         assert(s.ok());
 
-        std::string key5 = serialize_key(5, 9, 101);
+        std::string key5 = serialize_key(5, 22.4813575, 88.3802035);
         // std::cout << "key5: " << key5 << std::endl;
         s = db->Put(WriteOptions(), key5, "");
         assert(s.ok());
+
+        // cmp.Compare(Slice(key1), Slice(key2));
     }
 
     // Query the R-tree
@@ -224,7 +228,7 @@ int main() {
     //     // }
 
     }
-    std::string key1 = serialize_key(3, 5, 6);
+    std::string key1 = serialize_key(1, 18.6598102, 73.4636206);
     // s = db->Get(read_options, key1, &value);
     // std::cout<< s.ToString() << std::endl;
     s = db->SpatialRange(read_options, key1, &value);
