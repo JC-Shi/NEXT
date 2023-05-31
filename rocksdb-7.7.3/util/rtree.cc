@@ -9,6 +9,56 @@
 
 namespace rocksdb {
 
+    double GetMbrArea(Mbr aa) {
+        double width = aa.first.max - aa.first.min;
+        double length = aa.second.max - aa.second.min;
+        double MbrArea = width * length;
+
+        return MbrArea;
+    }
+
+    double GetOverlappingArea(Mbr aa, Mbr bb) {        
+        if (!IntersectMbrExcludeIID(aa, bb)) {
+            return 0.0;
+        } else {
+            double width;
+            double length;
+
+            if (aa.first.max >= bb.first.max) {
+                width = bb.first.max - aa.first.min;
+            } else {
+                width = aa.first.max - bb.first.min;
+            }
+
+            if (aa.second.max >= bb.second.max) {
+                length = bb.second.max - aa.second.min;
+            } else {
+                length = aa.second.max - bb.second.min;
+            }
+
+            double overlapArea = width * length;
+            return overlapArea;
+        }
+    }
+
+    bool IntersectMbrExcludeIID(Mbr aa,
+                      Mbr bb) {
+        // If a bounding region is empty, return true
+        // if aa or bb is empty, then may indicate full table scan
+        if (aa.empty() || bb.empty()) {
+            return true;
+        }
+        // If the bounding regions don't intersect in one dimension, they won't
+        // intersect at all, hence we can return early
+        if (aa.first.min > bb.first.max || bb.first.min > aa.first.max) {
+            return false;
+        }
+        if (aa.second.min > bb.second.max || bb.second.min > aa.second.max) {
+            return false;
+        }
+        return true;
+    }
+
     bool IntersectMbr(Mbr aa,
                       Mbr bb) {
         // If a bounding region is empty, return true

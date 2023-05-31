@@ -3,6 +3,7 @@
 #include <string>
 #include <fstream>
 #include <iostream>
+#include <unistd.h>
 #include <sstream>
 #include <vector>
 #include <chrono>
@@ -116,8 +117,9 @@ int main(int argc, char* argv[]) {
 
     options.info_log_level = DEBUG_LEVEL;
     options.statistics = rocksdb::CreateDBStatistics();
-    options.compaction_pri = kMaxMbr;
+    options.compaction_pri = kMinMbr;
     std::cout << "compatction_pri = " << options.compaction_pri << std::endl;
+    // options.stats_dump_period_sec = 5;
 
     BlockBasedTableOptions block_based_options;
 
@@ -136,7 +138,8 @@ int main(int argc, char* argv[]) {
 
     // options.level0_file_num_compaction_trigger = 10;
     // options.max_bytes_for_level_base = 512 * 1024 * 1024;
-    // options.check_flush_compaction_key_order = false;
+    options.check_flush_compaction_key_order = false;
+    options.force_consistency_checks = false;
 
     Status s;
     s = DB::Open(options, kDBPath, &db);
@@ -181,6 +184,11 @@ int main(int argc, char* argv[]) {
         std::cout << "end writing data" << std::endl;
         std::cout << "Execution time: " << totalDuration.count() << " nanoseconds" << std::endl;
 
+        sleep(120);
+        std::string stats_value;
+        db->GetProperty("rocksdb.stats", &stats_value);
+        std::cout << stats_value << std::endl;
+
         db->Close();
 
         // std::cout << "RocksDB stats: " << options.statistics->ToString() << std::endl;
@@ -202,7 +210,11 @@ int main(int argc, char* argv[]) {
     delete db;
 
     s = DB::Open(options, kDBPath, &db);
+    // std::string stats_value;
+    // db->GetProperty("rocksdb.stats", &stats_value);
     s = db->Close();
+
+    // std::cout << stats_value << std::endl;
 
     std::cout << "RocksDB stats: " << options.statistics->ToString() << std::endl;
 

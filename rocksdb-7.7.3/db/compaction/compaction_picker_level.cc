@@ -173,10 +173,18 @@ void LevelCompactionBuilder::PickFileToCompact(
     }
     start_level_inputs_.files = {level_file.second};
     start_level_inputs_.level = start_level_;
-    if (compaction_picker_->ExpandInputsToCleanCut(cf_name_, vstorage_,
+    // TODO: options.compaction_policy
+    if (compaction_picker_->CheckingExpandInputsToCleanCutMbr(cf_name_,
                                                    &start_level_inputs_)) {
       return;
-    }
+    }    
+
+    // original code
+    // if (compaction_picker_->ExpandInputsToCleanCut(cf_name_, vstorage_,
+    //                                                &start_level_inputs_)) {
+    //   return;
+    // }
+
   }
   start_level_inputs_.files.clear();
 }
@@ -279,7 +287,7 @@ void LevelCompactionBuilder::SetupInitialFiles() {
 bool LevelCompactionBuilder::SetupOtherL0FilesIfNeeded() {
   if (start_level_ == 0 && output_level_ != 0 && !is_l0_trivial_move_) {
     return compaction_picker_->GetOverlappingL0Files(
-        vstorage_, &start_level_inputs_, output_level_, &parent_index_);
+        vstorage_, &start_level_inputs_, output_level_, &parent_index_, ioptions_);
   }
   return true;
 }
@@ -417,7 +425,7 @@ bool LevelCompactionBuilder::SetupOtherInputsIfNeeded() {
     if (!is_l0_trivial_move_ &&
         !compaction_picker_->SetupOtherInputs(
             cf_name_, mutable_cf_options_, vstorage_, &start_level_inputs_,
-            &output_level_inputs_, &parent_index_, base_index_,
+            &output_level_inputs_, &parent_index_, base_index_, ioptions_,
             round_robin_expanding)) {
       return false;
     }
@@ -458,6 +466,11 @@ Compaction* LevelCompactionBuilder::PickCompaction() {
   }
   assert(start_level_ >= 0 && output_level_ >= 0);
 
+  ROCKS_LOG_DEBUG(ioptions_.logger, "output_level_inputs after initialFiles(): \n");
+  for (auto file:output_level_inputs_.files) {
+      ROCKS_LOG_DEBUG(ioptions_.logger, "File MBR: %s\n", file->mbr.toString().c_str());
+  }
+
   // If it is a L0 -> base level compaction, we need to set up other L0
   // files if needed.
   if (!SetupOtherL0FilesIfNeeded()) {
@@ -468,6 +481,11 @@ Compaction* LevelCompactionBuilder::PickCompaction() {
   // if needed.
   if (!SetupOtherInputsIfNeeded()) {
     return nullptr;
+  }
+
+  ROCKS_LOG_DEBUG(ioptions_.logger, "output_level_inputs after two Needed(): \n");
+  for (auto file:output_level_inputs_.files) {
+      ROCKS_LOG_DEBUG(ioptions_.logger, "File MBR: %s\n", file->mbr.toString().c_str());
   }
 
   // Form a compaction object containing the files we picked.
@@ -734,7 +752,8 @@ bool LevelCompactionBuilder::PickFileToCompact() {
     }
     ROCKS_LOG_DEBUG(ioptions_.logger, "Pick File to compact with MBR: %s", f->mbr.toString().c_str());
     start_level_inputs_.files.push_back(f);
-    if (!compaction_picker_->ExpandInputsToCleanCut(cf_name_, vstorage_,
+    // TODO: options.compaction_policy
+    if (!compaction_picker_->CheckingExpandInputsToCleanCutMbr(cf_name_,
                                                     &start_level_inputs_) ||
         compaction_picker_->FilesRangeOverlapWithCompaction(
             {start_level_inputs_}, output_level_)) {
@@ -748,18 +767,58 @@ bool LevelCompactionBuilder::PickFileToCompact() {
       continue;
     }
 
+    // ==========================================================================
+    // original code
+
+    // if (!compaction_picker_->ExpandInputsToCleanCut(cf_name_, vstorage_,
+    //                                                 &start_level_inputs_) ||
+    //     compaction_picker_->FilesRangeOverlapWithCompaction(
+    //         {start_level_inputs_}, output_level_)) {
+    //   // A locked (pending compaction) input-level file was pulled in due to
+    //   // user-key overlap.
+    //   start_level_inputs_.clear();
+
+    //   if (ioptions_.compaction_pri == kRoundRobin) {
+    //     return false;
+    //   }
+    //   continue;
+    // }
+
+    // ==========================================================================
+
     // Now that input level is fully expanded, we check whether any output
     // files are locked due to pending compaction.
     //
     // Note we rely on ExpandInputsToCleanCut() to tell us whether any output-
     // level files are locked, not just the extra ones pulled in for user-key
     // overlap.
-    InternalKey smallest, largest;
-    compaction_picker_->GetRange(start_level_inputs_, &smallest, &largest);
+
+    //==============================================================================
+    // TODO: options.compaction_policy
+
+    // Output_level_inputs based on Mbr
+    // Special design for mbr-based compaction
+    std::vector<Mbr> Mbr_vect;
+    compaction_picker_->GetMbrList(start_level_inputs_, &Mbr_vect);
     CompactionInputFiles output_level_inputs;
     output_level_inputs.level = output_level_;
-    vstorage_->GetOverlappingInputs(output_level_, &smallest, &largest,
-                                    &output_level_inputs.files);
+    // Input K in GetKMaxOverlappingInputs: the number of overlapping files
+    // ToChange: k
+    vstorage_->GetkMaxOverlappingInputs(output_level_, &Mbr_vect, &output_level_inputs.files, ioptions_, 2);
+
+    //==============================================================================
+
+    // Original code
+
+    // InternalKey smallest, largest;
+    // compaction_picker_->GetRange(start_level_inputs_, &smallest, &largest);
+    // CompactionInputFiles output_level_inputs;
+    // output_level_inputs.level = output_level_;
+    // vstorage_->GetOverlappingInputs(output_level_, &smallest, &largest,
+    //                                 &output_level_inputs.files);
+
+    //==============================================================================
+
     ROCKS_LOG_DEBUG(ioptions_.logger, "List of overlapping files at the next level: \n");
     for (auto file:output_level_inputs.files) {
         ROCKS_LOG_DEBUG(ioptions_.logger, "File MBR: %s\n", file->mbr.toString().c_str());
@@ -769,14 +828,32 @@ bool LevelCompactionBuilder::PickFileToCompact() {
         break;
       }
     } else {
-      if (!compaction_picker_->ExpandInputsToCleanCut(cf_name_, vstorage_,
+
+      //==========================================================================
+      // TODO: options.compaction_policy
+
+      if (!compaction_picker_->CheckingExpandInputsToCleanCutMbr(cf_name_,
                                                       &output_level_inputs)) {
         start_level_inputs_.clear();
         if (ioptions_.compaction_pri == kRoundRobin) {
           return false;
         }
         continue;
-      }
+      }      
+
+      //==========================================================================
+      // Original code
+      
+      // if (!compaction_picker_->ExpandInputsToCleanCut(cf_name_, vstorage_,
+      //                                                 &output_level_inputs)) {
+      //   start_level_inputs_.clear();
+      //   if (ioptions_.compaction_pri == kRoundRobin) {
+      //     return false;
+      //   }
+      //   continue;
+      // }
+
+      //=========================================================================
     }
 
     base_index_ = index;

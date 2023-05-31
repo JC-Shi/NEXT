@@ -248,6 +248,10 @@ class VersionStorageInfo {
   // Return idx'th highest score
   double CompactionScore(int idx) const { return compaction_score_[idx]; }
 
+  void GetkMaxOverlappingInputs(
+    int level, const std::vector<Mbr>* mbr_vect,
+    std::vector<FileMetaData*>* inputs, ImmutableOptions ioptions, int k_num_files) const;
+
   void GetOverlappingInputs(
       int level, const InternalKey* begin,  // nullptr means before all keys
       const InternalKey* end,               // nullptr means after all keys
@@ -266,6 +270,10 @@ class VersionStorageInfo {
       int hint_index = -1,        // index of overlap file
       int* file_index = nullptr)  // return index of overlap file
       const;
+
+  void GetOverlappingInputsBasedMbrArea(int level, 
+    const std::vector<Mbr>* mbr_vect, std::vector<FileMetaData*>* inputs, 
+    ImmutableOptions ioptions, int k_num_files) const;
 
   void GetOverlappingInputsRangeBinarySearch(
       int level,                 // level > 0

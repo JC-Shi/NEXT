@@ -120,8 +120,11 @@ namespace rocksdb {
         int max[2];
     };
 
+    extern double GetMbrArea(Mbr aa);
+    extern double GetOverlappingArea(Mbr aa, Mbr bb);
 
     extern bool IntersectMbr(Mbr aa, Mbr bb);
+    extern bool IntersectMbrExcludeIID(Mbr aa, Mbr bb);
     extern Mbr ReadKeyMbr(Slice data);
 
     // Reads the mbr (intervals) from the key. It modifies the key slice.

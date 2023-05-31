@@ -20,6 +20,7 @@
 #include <string>
 #include <unordered_map>
 #include <vector>
+#include <utility>
 
 #include "db/blob/blob_fetcher.h"
 #include "db/blob/blob_file_cache.h"
@@ -4029,6 +4030,25 @@ bool VersionStorageInfo::OverlapInLevel(int level,
                                largest_user_key);
 }
 
+// Get inputs for compaction from output level
+// The output_level_inputs are selected based on overlapping area
+// Top k maximum overlapping files will be selected
+void VersionStorageInfo::GetkMaxOverlappingInputs(
+    int level, const std::vector<Mbr>* mbr_vect,
+    std::vector<FileMetaData*>* inputs, ImmutableOptions ioptions, int k_num_files) const {
+  if (level >= num_non_empty_levels_) {
+    // this level is empty, no overlapping inputs
+    return;
+  }
+
+  inputs->clear();
+
+  if (level > 0) {
+    GetOverlappingInputsBasedMbrArea(level, mbr_vect, inputs, ioptions, k_num_files);
+    return;
+  }
+}
+
 // Store in "*inputs" all files in "level" that overlap [begin,end]
 // If hint_index is specified, then it points to a file in the
 // overlapping range.
@@ -4140,6 +4160,63 @@ void VersionStorageInfo::GetCleanInputsWithinInterval(
   GetOverlappingInputsRangeBinarySearch(level, begin, end, inputs,
                                         hint_index, file_index,
                                         true /* within_interval */);
+}
+
+// Finding the overlapping area for each file
+// Then sort them and pick the top k files
+void VersionStorageInfo::GetOverlappingInputsBasedMbrArea(int level, const std::vector<Mbr>* mbr_vect,
+std::vector<FileMetaData*>* inputs, ImmutableOptions ioptions, int k_num_files) const {
+
+  assert(level > 0);
+  const FdWithKeyRange* files = level_files_brief_[level].files;
+  const int num_files = static_cast<int>(level_files_brief_[level].num_files);
+  int start_index = 0;
+  int end_index = num_files;
+  int input_list_size = (int) mbr_vect->size();
+  std::vector<std::pair<double, int>> V_overlaparea_index;
+
+  for(int i=start_index; i < end_index; i++) {
+    Mbr ofile_mbr = files[i].file_metadata->mbr;
+    ROCKS_LOG_DEBUG(ioptions.logger, "OutPut Level Mbr %d:  %s", i, ofile_mbr.toString().c_str());
+    double overlapping_areas= 0.0;
+
+    for(int j=0; j < input_list_size; j++) {
+      Mbr ifile_mbr = mbr_vect->at(j);
+      overlapping_areas += GetOverlappingArea(ofile_mbr, ifile_mbr);
+    }
+
+    V_overlaparea_index.push_back(std::make_pair(overlapping_areas, i));
+  }
+
+  std::sort(V_overlaparea_index.rbegin(), V_overlaparea_index.rend());
+  
+  
+  for (int a=0; a<end_index; a++){
+     ROCKS_LOG_DEBUG(ioptions.logger, "Sorted Output Level Vectors (overlapping areas, index): %f, %d \n", V_overlaparea_index[a].first, V_overlaparea_index[a].second);
+  }
+
+  // If k_num_files == -1, this means picking all files in that level
+  int k_n_f;
+  if (k_num_files == -1) {
+    k_n_f = num_files;
+  } else {
+    k_n_f = std::min(num_files, k_num_files);
+  }
+
+  // If the largest overlapping area is 0, then no overlapped files
+  // return immediately
+  if(V_overlaparea_index[0].first == 0.0) {
+    return;
+  }
+
+  for(int k=0; k < k_n_f; k++){
+    if(V_overlaparea_index[k].first == 0.0){
+      break;
+    }
+    int idx = V_overlaparea_index[k].second;
+    inputs->push_back(files_[level][idx]);
+  }
+
 }
 
 // Store in "*inputs" all files in "level" that overlap [begin,end]

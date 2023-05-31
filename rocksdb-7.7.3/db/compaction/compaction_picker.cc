@@ -28,14 +28,21 @@
 namespace ROCKSDB_NAMESPACE {
 
 namespace {
-uint64_t TotalCompensatedFileSize(const std::vector<FileMetaData*>& files) {
-  uint64_t sum = 0;
-  for (size_t i = 0; i < files.size() && files[i]; i++) {
-    sum += files[i]->compensated_file_size;
-  }
-  return sum;
-}
+// TODO: options.compaction_policy
+// ==============================================================================
+// original code
+
+// uint64_t TotalCompensatedFileSize(const std::vector<FileMetaData*>& files) {
+//   uint64_t sum = 0;
+//   for (size_t i = 0; i < files.size() && files[i]; i++) {
+//     sum += files[i]->compensated_file_size;
+//   }
+//   return sum;
+// }
+// ==============================================================================
 }  // anonymous namespace
+
+
 
 bool FindIntraL0Compaction(const std::vector<FileMetaData*>& level_files,
                            size_t min_files_to_compact,
@@ -165,6 +172,18 @@ void CompactionPicker::ReleaseCompactionFiles(Compaction* c, Status status) {
   }
 }
 
+// GetMbrList
+void CompactionPicker::GetMbrList(const CompactionInputFiles& inputs,
+                                  std::vector<Mbr>* Mbr_vect) const {
+  assert(!inputs.empty());
+  Mbr_vect->clear();
+
+  for(size_t i =0; i < inputs.size(); i++) {
+    FileMetaData* f = inputs[i];
+    Mbr_vect->push_back(f->mbr);
+  }
+}
+
 void CompactionPicker::GetRange(const CompactionInputFiles& inputs,
                                 InternalKey* smallest,
                                 InternalKey* largest) const {
@@ -238,6 +257,31 @@ void CompactionPicker::GetRange(const std::vector<CompactionInputFiles>& inputs,
     }
   }
   assert(initialized);
+}
+
+// Special expandInputsToCleanCut for spatial compaction
+bool CompactionPicker::CheckingExpandInputsToCleanCutMbr(const std::string& /*cf_name*/,
+                                              CompactionInputFiles* inputs) {
+  // This isn't good compaction
+  assert(!inputs->empty());
+
+  const int level = inputs->level;
+  // GetOverlappingInputs will always do the right thing for level-0.
+  // So we don't need to do any expansion if level == 0.
+  if (level == 0) {
+    return true;
+  }
+
+  // we started off with inputs non-empty and the previous loop only grew
+  // inputs. thus, inputs should be non-empty here
+  assert(!inputs->empty());
+
+  // If, after the expansion, there are files that are already under
+  // compaction, then we must drop/cancel this compaction.
+  if (AreFilesInCompaction(inputs->files)) {
+    return false;
+  }
+  return true;
 }
 
 bool CompactionPicker::ExpandInputsToCleanCut(const std::string& /*cf_name*/,
@@ -450,6 +494,16 @@ bool CompactionPicker::IsRangeInCompaction(VersionStorageInfo* vstorage,
   return AreFilesInCompaction(inputs);
 }
 
+bool CompactionPicker::IsRangeInCompactionMbr(VersionStorageInfo* vstorage,
+                                           const std::vector<Mbr>* mbr_vect,
+                                           int level, ImmutableOptions ioptions) {
+  std::vector<FileMetaData*> inputs;
+  assert(level < NumberLevels());
+
+  vstorage->GetkMaxOverlappingInputs(level, mbr_vect, &inputs, ioptions, -1);
+  return AreFilesInCompaction(inputs);
+}
+
 // Populates the set of inputs of all other levels that overlap with the
 // start level.
 // Now we assume all levels except start level and output level are empty.
@@ -464,7 +518,7 @@ bool CompactionPicker::SetupOtherInputs(
     const std::string& cf_name, const MutableCFOptions& mutable_cf_options,
     VersionStorageInfo* vstorage, CompactionInputFiles* inputs,
     CompactionInputFiles* output_level_inputs, int* parent_index,
-    int base_index, bool only_expand_towards_right) {
+    int base_index, ImmutableOptions ioptions, bool only_expand_towards_right) {
   assert(!inputs->empty());
   assert(output_level_inputs->empty());
   const int input_level = inputs->level;
@@ -480,104 +534,148 @@ bool CompactionPicker::SetupOtherInputs(
     assert(vstorage->NumLevelFiles(l) == 0);
   }
 
-  InternalKey smallest, largest;
+  // ==============================================================================
+  // TODO: options.compaction_policy
+  // ToChange: k
 
-  // Get the range one last time.
-  GetRange(*inputs, &smallest, &largest);
+  std::vector<Mbr> Mbr_vect;
+  GetMbrList(*inputs, &Mbr_vect);
+  vstorage->GetkMaxOverlappingInputs(output_level, &Mbr_vect,
+                                      &output_level_inputs->files, ioptions, 2);
 
-  // Populate the set of next-level files (inputs_GetOutputLevelInputs()) to
-  // include in compaction
-  vstorage->GetOverlappingInputs(output_level, &smallest, &largest,
-                                 &output_level_inputs->files, *parent_index,
-                                 parent_index);
+  // ==============================================================================
+  // Original Code
+
+  // InternalKey smallest, largest;
+
+  // // Get the range one last time.
+  // GetRange(*inputs, &smallest, &largest);
+
+  // // Populate the set of next-level files (inputs_GetOutputLevelInputs()) to
+  // // include in compaction
+  // vstorage->GetOverlappingInputs(output_level, &smallest, &largest,
+  //                                &output_level_inputs->files, *parent_index,
+  //                                parent_index);
+
+  // ===============================================================================
+
   if (AreFilesInCompaction(output_level_inputs->files)) {
     return false;
   }
+
+  // ================================================================================
+  // TODO: options.compaction_policy
+
   if (!output_level_inputs->empty()) {
-    if (!ExpandInputsToCleanCut(cf_name, vstorage, output_level_inputs)) {
+    if (!CheckingExpandInputsToCleanCutMbr(cf_name, output_level_inputs)) {
       return false;
     }
   }
 
-  // See if we can further grow the number of inputs in "level" without
-  // changing the number of "level+1" files we pick up. We also choose NOT
-  // to expand if this would cause "level" to include some entries for some
-  // user key, while excluding other entries for the same user key. This
-  // can happen when one user key spans multiple files.
-  if (!output_level_inputs->empty()) {
-    const uint64_t limit = mutable_cf_options.max_compaction_bytes;
-    const uint64_t output_level_inputs_size =
-        TotalCompensatedFileSize(output_level_inputs->files);
-    const uint64_t inputs_size = TotalCompensatedFileSize(inputs->files);
-    bool expand_inputs = false;
+  // ================================================================================
+  // original code
 
-    CompactionInputFiles expanded_inputs;
-    expanded_inputs.level = input_level;
-    // Get closed interval of output level
-    InternalKey all_start, all_limit;
-    GetRange(*inputs, *output_level_inputs, &all_start, &all_limit);
-    bool try_overlapping_inputs = true;
-    if (only_expand_towards_right) {
-      // Round-robin compaction only allows expansion towards the larger side.
-      vstorage->GetOverlappingInputs(input_level, &smallest, &all_limit,
-                                     &expanded_inputs.files, base_index,
-                                     nullptr);
-    } else {
-      vstorage->GetOverlappingInputs(input_level, &all_start, &all_limit,
-                                     &expanded_inputs.files, base_index,
-                                     nullptr);
-    }
-    uint64_t expanded_inputs_size =
-        TotalCompensatedFileSize(expanded_inputs.files);
-    if (!ExpandInputsToCleanCut(cf_name, vstorage, &expanded_inputs)) {
-      try_overlapping_inputs = false;
-    }
-    if (try_overlapping_inputs && expanded_inputs.size() > inputs->size() &&
-        output_level_inputs_size + expanded_inputs_size < limit &&
-        !AreFilesInCompaction(expanded_inputs.files)) {
-      InternalKey new_start, new_limit;
-      GetRange(expanded_inputs, &new_start, &new_limit);
-      CompactionInputFiles expanded_output_level_inputs;
-      expanded_output_level_inputs.level = output_level;
-      vstorage->GetOverlappingInputs(output_level, &new_start, &new_limit,
-                                     &expanded_output_level_inputs.files,
-                                     *parent_index, parent_index);
-      assert(!expanded_output_level_inputs.empty());
-      if (!AreFilesInCompaction(expanded_output_level_inputs.files) &&
-          ExpandInputsToCleanCut(cf_name, vstorage,
-                                 &expanded_output_level_inputs) &&
-          expanded_output_level_inputs.size() == output_level_inputs->size()) {
-        expand_inputs = true;
-      }
-    }
-    if (!expand_inputs) {
-      vstorage->GetCleanInputsWithinInterval(input_level, &all_start,
-                                             &all_limit, &expanded_inputs.files,
-                                             base_index, nullptr);
-      expanded_inputs_size = TotalCompensatedFileSize(expanded_inputs.files);
-      if (expanded_inputs.size() > inputs->size() &&
-          output_level_inputs_size + expanded_inputs_size < limit &&
-          !AreFilesInCompaction(expanded_inputs.files)) {
-        expand_inputs = true;
-      }
-    }
-    if (expand_inputs) {
-      ROCKS_LOG_INFO(ioptions_.logger,
-                     "[%s] Expanding@%d %" ROCKSDB_PRIszt "+%" ROCKSDB_PRIszt
-                     "(%" PRIu64 "+%" PRIu64 " bytes) to %" ROCKSDB_PRIszt
-                     "+%" ROCKSDB_PRIszt " (%" PRIu64 "+%" PRIu64 " bytes)\n",
-                     cf_name.c_str(), input_level, inputs->size(),
-                     output_level_inputs->size(), inputs_size,
-                     output_level_inputs_size, expanded_inputs.size(),
-                     output_level_inputs->size(), expanded_inputs_size,
-                     output_level_inputs_size);
-      inputs->files = expanded_inputs.files;
-    }
-  } else {
-    // Likely to be trivial move. Expand files if they are still trivial moves,
-    // but limit to mutable_cf_options.max_compaction_bytes or 8 files so that
-    // we don't create too much compaction pressure for the next level.
-  }
+  // if (!output_level_inputs->empty()) {
+  //   if (!ExpandInputsToCleanCut(cf_name, vstorage, output_level_inputs)) {
+  //     return false;
+  //   }
+  // }
+
+  // ================================================================================
+  // TODO: options.compaction_policy
+  
+  (void) mutable_cf_options;
+  (void) parent_index;
+  (void) base_index;
+  (void) only_expand_towards_right;
+
+  
+  // =================================================================================
+  // original code
+
+  // // See if we can further grow the number of inputs in "level" without
+  // // changing the number of "level+1" files we pick up. We also choose NOT
+  // // to expand if this would cause "level" to include some entries for some
+  // // user key, while excluding other entries for the same user key. This
+  // // can happen when one user key spans multiple files.
+  // (void) ioptions;
+  // if (!output_level_inputs->empty()) {
+  //   const uint64_t limit = mutable_cf_options.max_compaction_bytes;
+  //   const uint64_t output_level_inputs_size =
+  //       TotalCompensatedFileSize(output_level_inputs->files);
+  //   const uint64_t inputs_size = TotalCompensatedFileSize(inputs->files);
+  //   bool expand_inputs = false;
+
+  //   CompactionInputFiles expanded_inputs;
+  //   expanded_inputs.level = input_level;
+  //   // Get closed interval of output level
+  //   InternalKey all_start, all_limit;
+  //   GetRange(*inputs, *output_level_inputs, &all_start, &all_limit);
+  //   bool try_overlapping_inputs = true;
+  //   if (only_expand_towards_right) {
+  //     // Round-robin compaction only allows expansion towards the larger side.
+  //     vstorage->GetOverlappingInputs(input_level, &smallest, &all_limit,
+  //                                    &expanded_inputs.files, base_index,
+  //                                    nullptr);
+  //   } else {
+  //     vstorage->GetOverlappingInputs(input_level, &all_start, &all_limit,
+  //                                    &expanded_inputs.files, base_index,
+  //                                    nullptr);
+  //   }
+  //   uint64_t expanded_inputs_size =
+  //       TotalCompensatedFileSize(expanded_inputs.files);
+  //   if (!ExpandInputsToCleanCut(cf_name, vstorage, &expanded_inputs)) {
+  //     try_overlapping_inputs = false;
+  //   }
+  //   if (try_overlapping_inputs && expanded_inputs.size() > inputs->size() &&
+  //       output_level_inputs_size + expanded_inputs_size < limit &&
+  //       !AreFilesInCompaction(expanded_inputs.files)) {
+  //     InternalKey new_start, new_limit;
+  //     GetRange(expanded_inputs, &new_start, &new_limit);
+  //     CompactionInputFiles expanded_output_level_inputs;
+  //     expanded_output_level_inputs.level = output_level;
+  //     vstorage->GetOverlappingInputs(output_level, &new_start, &new_limit,
+  //                                    &expanded_output_level_inputs.files,
+  //                                    *parent_index, parent_index);
+  //     assert(!expanded_output_level_inputs.empty());
+  //     if (!AreFilesInCompaction(expanded_output_level_inputs.files) &&
+  //         ExpandInputsToCleanCut(cf_name, vstorage,
+  //                                &expanded_output_level_inputs) &&
+  //         expanded_output_level_inputs.size() == output_level_inputs->size()) {
+  //       expand_inputs = true;
+  //     }
+  //   }
+  //   if (!expand_inputs) {
+  //     vstorage->GetCleanInputsWithinInterval(input_level, &all_start,
+  //                                            &all_limit, &expanded_inputs.files,
+  //                                            base_index, nullptr);
+  //     expanded_inputs_size = TotalCompensatedFileSize(expanded_inputs.files);
+  //     if (expanded_inputs.size() > inputs->size() &&
+  //         output_level_inputs_size + expanded_inputs_size < limit &&
+  //         !AreFilesInCompaction(expanded_inputs.files)) {
+  //       expand_inputs = true;
+  //     }
+  //   }
+  //   if (expand_inputs) {
+  //     ROCKS_LOG_INFO(ioptions_.logger,
+  //                    "[%s] Expanding@%d %" ROCKSDB_PRIszt "+%" ROCKSDB_PRIszt
+  //                    "(%" PRIu64 "+%" PRIu64 " bytes) to %" ROCKSDB_PRIszt
+  //                    "+%" ROCKSDB_PRIszt " (%" PRIu64 "+%" PRIu64 " bytes)\n",
+  //                    cf_name.c_str(), input_level, inputs->size(),
+  //                    output_level_inputs->size(), inputs_size,
+  //                    output_level_inputs_size, expanded_inputs.size(),
+  //                    output_level_inputs->size(), expanded_inputs_size,
+  //                    output_level_inputs_size);
+  //     inputs->files = expanded_inputs.files;
+  //   }
+  // } else {
+  //   // Likely to be trivial move. Expand files if they are still trivial moves,
+  //   // but limit to mutable_cf_options.max_compaction_bytes or 8 files so that
+  //   // we don't create too much compaction pressure for the next level.
+  // }
+
+  // =================================================================================
+
   return true;
 }
 
@@ -789,7 +887,8 @@ Compaction* CompactionPicker::CompactRange(
 
   InternalKey key_storage;
   InternalKey* next_smallest = &key_storage;
-  if (ExpandInputsToCleanCut(cf_name, vstorage, &inputs, &next_smallest) ==
+  // TODO: options.compaction_policy
+  if (CheckingExpandInputsToCleanCutMbr(cf_name, &inputs) ==
       false) {
     // manual compaction is now multi-threaded, so it can
     // happen that ExpandWhileOverlapping fails
@@ -797,6 +896,18 @@ Compaction* CompactionPicker::CompactRange(
     *manual_conflict = true;
     return nullptr;
   }
+
+  // // original code
+  // if (ExpandInputsToCleanCut(cf_name, vstorage, &inputs, &next_smallest) ==
+  //     false) {
+  //   // manual compaction is now multi-threaded, so it can
+  //   // happen that ExpandWhileOverlapping fails
+  //   // we handle it higher in RunManualCompaction
+  //   *manual_conflict = true;
+  //   return nullptr;
+  // }
+
+  //===============================================================================
 
   if (covering_the_whole_range || !next_smallest) {
     *compaction_end = nullptr;
@@ -814,7 +925,7 @@ Compaction* CompactionPicker::CompactRange(
   if (input_level != output_level) {
     int parent_index = -1;
     if (!SetupOtherInputs(cf_name, mutable_cf_options, vstorage, &inputs,
-                          &output_level_inputs, &parent_index, -1)) {
+                          &output_level_inputs, &parent_index, -1, ioptions_)) {
       // manual compaction is now multi-threaded, so it can
       // happen that SetupOtherInputs fails
       // we handle it higher in RunManualCompaction
@@ -1164,7 +1275,9 @@ void CompactionPicker::PickFilesMarkedForCompaction(
 
     start_level_inputs->files = {level_file.second};
     start_level_inputs->level = *start_level;
-    return ExpandInputsToCleanCut(cf_name, vstorage, start_level_inputs);
+    // TODO: options.compaction_policy
+    return CheckingExpandInputsToCleanCutMbr(cf_name, start_level_inputs);
+    // return ExpandInputsToCleanCut(cf_name, vstorage, start_level_inputs);
   };
 
   // take a chance on a random file first
@@ -1189,11 +1302,32 @@ void CompactionPicker::PickFilesMarkedForCompaction(
 }
 
 bool CompactionPicker::GetOverlappingL0Files(
-    VersionStorageInfo* vstorage, CompactionInputFiles* start_level_inputs,
-    int output_level, int* parent_index) {
+    VersionStorageInfo* vstorage, CompactionInputFiles* start_level_inputs, 
+    int output_level, int* parent_index, ImmutableOptions ioptions) {
   // Two level 0 compaction won't run at the same time, so don't need to worry
   // about files on level 0 being compacted.
   assert(level0_compactions_in_progress()->empty());
+
+  // =======================================================================================
+  // TODO: options.compaction_policy (this one dun change!!!!!)
+
+  // std::vector<Mbr> Mbr_vect;
+  // GetMbrList(*start_level_inputs, &Mbr_vect);
+  // start_level_inputs->files.clear();
+  // vstorage->GetkMaxOverlappingInputs(0, &Mbr_vect,
+  //                                     &(start_level_inputs->files), ioptions, -1);
+
+  // GetMbrList(*start_level_inputs, &Mbr_vect);
+  // if (IsRangeInCompactionMbr(vstorage, &Mbr_vect, output_level, ioptions)) {
+  //   return false;
+  // }                
+
+  // (void) parent_index;                
+
+  // =======================================================================================
+  // original code
+  (void) ioptions;
+
   InternalKey smallest, largest;
   GetRange(*start_level_inputs, &smallest, &largest);
   // Note that the next call will discard the file we placed in
@@ -1203,6 +1337,7 @@ bool CompactionPicker::GetOverlappingL0Files(
   vstorage->GetOverlappingInputs(0, &smallest, &largest,
                                  &(start_level_inputs->files));
 
+
   // If we include more L0 files in the same compaction run it can
   // cause the 'smallest' and 'largest' key to get extended to a
   // larger range. So, re-invoke GetRange to get the new key range
@@ -1211,6 +1346,10 @@ bool CompactionPicker::GetOverlappingL0Files(
                           parent_index)) {
     return false;
   }
+
+  // =======================================================================================
+
+
   assert(!start_level_inputs->files.empty());
 
   return true;
