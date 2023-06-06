@@ -1,0 +1,3 @@
+[submodule "spatial-filter-fst"]
+	path = spatial-filter-fst
+	url = https://github.com/Jamesyang2333/spatial-filter-fst.git
