@@ -63,26 +63,27 @@ namespace rocksdb {
 
             // std::cout << hilbert_a << " " << hilbert_b << std::endl;
 
-            // if (hilbert_a < hilbert_b) {
-            //     return -1;
-            // } else if (hilbert_a > hilbert_b) {
-            //     return 1;
-            // } else {
-            //     if (*value_a < *value_b) {
-            //         return -1;
-            //     } else if (*value_a > *value_b) {
-            //         return 1;
-            //     } else {
-            //         return 0;
-            //     }
-            // }
+            if (hilbert_a < hilbert_b) {
+                return -1;
+            } else if (hilbert_a > hilbert_b) {
+                return 1;
+            } else {
+                if (*value_a < *value_b) {
+                    return -1;
+                } else if (*value_a > *value_b) {
+                    return 1;
+                } else {
+                    return 0;
+                }
+            }
 
+            // TODO: options.compaction_policy query/write
             // Specifically for R-tree as r-tree does not implement ordering
-            (void) hilbert_a;
-            (void) hilbert_b;
-            (void) value_a;
-            (void) value_b;
-            return 1;
+            // (void) hilbert_a;
+            // (void) hilbert_b;
+            // (void) value_a;
+            // (void) value_b;
+            // return 1;
         }
 
         void FindShortestSeparator(std::string* start,

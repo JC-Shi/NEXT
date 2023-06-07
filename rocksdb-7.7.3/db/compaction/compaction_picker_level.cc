@@ -808,7 +808,7 @@ bool LevelCompactionBuilder::PickFileToCompact() {
 
     //==============================================================================
 
-    // // Version2
+    // Version2
 
     // InternalKey smallest, largest;
     // compaction_picker_->GetRange(start_level_inputs_, &smallest, &largest);
@@ -819,7 +819,7 @@ bool LevelCompactionBuilder::PickFileToCompact() {
     // // ToChange: k
     // vstorage_->GetOverlappingInputsWithMbr(output_level_, &smallest, &largest,
     //                                 &Mbr_vect, &output_level_inputs.files, 
-    //                                 ioptions_, 2);
+    //                                 ioptions_, 5);
 
     //==============================================================================
 

@@ -168,15 +168,15 @@ int main(int argc, char* argv[]) {
 
             std::string key = serialize_key(id, low[0], low[1]);
 
-            std::cout << "In Key: " << id << low[0] << low[1] << std::endl;
+            // std::cout << "In Key: " << id << low[0] << low[1] << std::endl;
             // Put key-value
             auto start = std::chrono::high_resolution_clock::now();
             s = db->Put(WriteOptions(), key, "");
             auto end = std::chrono::high_resolution_clock::now(); 
             auto duration = std::chrono::duration_cast<std::chrono::nanoseconds>(end - start);
             totalDuration = totalDuration + duration;
-            std::cout << "In Status: " << s.ToString() << std::endl;
-            assert(s.ok());
+            // std::cout << "In Status: " << s.ToString() << std::endl;
+            // assert(s.ok());
         }
         std::cout << "Status: " << s.ToString() << std::endl;
         assert(s.ok());

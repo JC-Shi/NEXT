@@ -4310,7 +4310,11 @@ std::vector<FileMetaData*>* inputs, ImmutableOptions ioptions, int k_num_files) 
 void VersionStorageInfo::GetOverlappingInputsMbr(CompactionInputFiles& new_inputs, const std::vector<Mbr>* mbr_vect,
 std::vector<FileMetaData*>* inputs, ImmutableOptions ioptions, int k_num_files) const {
 
-  assert(new_inputs->size() > 0);
+  ROCKS_LOG_DEBUG(ioptions.logger, "New Inputs size: %d", static_cast<int>(new_inputs.size()));
+  if (new_inputs.empty()) {
+    // if no key-range overlap, then return directly
+    return;
+  }
   const int num_files = static_cast<int>(new_inputs.size());
   int start_index = 0;
   int end_index = num_files;
