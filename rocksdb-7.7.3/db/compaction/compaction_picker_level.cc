@@ -174,16 +174,16 @@ void LevelCompactionBuilder::PickFileToCompact(
     start_level_inputs_.files = {level_file.second};
     start_level_inputs_.level = start_level_;
     // TODO: options.compaction_policy
-    if (compaction_picker_->CheckingExpandInputsToCleanCutMbr(cf_name_,
-                                                   &start_level_inputs_)) {
-      return;
-    }    
-
-    // original code
-    // if (compaction_picker_->ExpandInputsToCleanCut(cf_name_, vstorage_,
+    // if (compaction_picker_->CheckingExpandInputsToCleanCutMbr(cf_name_,
     //                                                &start_level_inputs_)) {
     //   return;
-    // }
+    // }    
+
+    // original code
+    if (compaction_picker_->ExpandInputsToCleanCut(cf_name_, vstorage_,
+                                                   &start_level_inputs_)) {
+      return;
+    }
 
   }
   start_level_inputs_.files.clear();
@@ -753,24 +753,7 @@ bool LevelCompactionBuilder::PickFileToCompact() {
     ROCKS_LOG_DEBUG(ioptions_.logger, "Pick File to compact with MBR: %s", f->mbr.toString().c_str());
     start_level_inputs_.files.push_back(f);
     // TODO: options.compaction_policy
-    if (!compaction_picker_->CheckingExpandInputsToCleanCutMbr(cf_name_,
-                                                    &start_level_inputs_) ||
-        compaction_picker_->FilesRangeOverlapWithCompaction(
-            {start_level_inputs_}, output_level_)) {
-      // A locked (pending compaction) input-level file was pulled in due to
-      // user-key overlap.
-      start_level_inputs_.clear();
-
-      if (ioptions_.compaction_pri == kRoundRobin) {
-        return false;
-      }
-      continue;
-    }
-
-    // ==========================================================================
-    // original code
-
-    // if (!compaction_picker_->ExpandInputsToCleanCut(cf_name_, vstorage_,
+    // if (!compaction_picker_->CheckingExpandInputsToCleanCutMbr(cf_name_,
     //                                                 &start_level_inputs_) ||
     //     compaction_picker_->FilesRangeOverlapWithCompaction(
     //         {start_level_inputs_}, output_level_)) {
@@ -785,6 +768,23 @@ bool LevelCompactionBuilder::PickFileToCompact() {
     // }
 
     // ==========================================================================
+    // original code
+
+    if (!compaction_picker_->ExpandInputsToCleanCut(cf_name_, vstorage_,
+                                                    &start_level_inputs_) ||
+        compaction_picker_->FilesRangeOverlapWithCompaction(
+            {start_level_inputs_}, output_level_)) {
+      // A locked (pending compaction) input-level file was pulled in due to
+      // user-key overlap.
+      start_level_inputs_.clear();
+
+      if (ioptions_.compaction_pri == kRoundRobin) {
+        return false;
+      }
+      continue;
+    }
+
+    // ==========================================================================
 
     // Now that input level is fully expanded, we check whether any output
     // files are locked due to pending compaction.
@@ -796,26 +796,41 @@ bool LevelCompactionBuilder::PickFileToCompact() {
     //==============================================================================
     // TODO: options.compaction_policy
 
-    // Output_level_inputs based on Mbr
-    // Special design for mbr-based compaction
-    std::vector<Mbr> Mbr_vect;
-    compaction_picker_->GetMbrList(start_level_inputs_, &Mbr_vect);
-    CompactionInputFiles output_level_inputs;
-    output_level_inputs.level = output_level_;
-    // Input K in GetKMaxOverlappingInputs: the number of overlapping files
-    // ToChange: k
-    vstorage_->GetkMaxOverlappingInputs(output_level_, &Mbr_vect, &output_level_inputs.files, ioptions_, 2);
+    // // Output_level_inputs based on Mbr
+    // // Special design for mbr-based compaction
+    // std::vector<Mbr> Mbr_vect;
+    // compaction_picker_->GetMbrList(start_level_inputs_, &Mbr_vect);
+    // CompactionInputFiles output_level_inputs;
+    // output_level_inputs.level = output_level_;
+    // // Input K in GetKMaxOverlappingInputs: the number of overlapping files
+    // // ToChange: k
+    // vstorage_->GetkMaxOverlappingInputs(output_level_, &Mbr_vect, &output_level_inputs.files, ioptions_, 2);
 
     //==============================================================================
 
-    // Original code
+    // // Version2
 
     // InternalKey smallest, largest;
     // compaction_picker_->GetRange(start_level_inputs_, &smallest, &largest);
     // CompactionInputFiles output_level_inputs;
     // output_level_inputs.level = output_level_;
-    // vstorage_->GetOverlappingInputs(output_level_, &smallest, &largest,
-    //                                 &output_level_inputs.files);
+    // std::vector<Mbr> Mbr_vect;
+    // compaction_picker_->GetMbrList(start_level_inputs_, &Mbr_vect);    
+    // // ToChange: k
+    // vstorage_->GetOverlappingInputsWithMbr(output_level_, &smallest, &largest,
+    //                                 &Mbr_vect, &output_level_inputs.files, 
+    //                                 ioptions_, 2);
+
+    //==============================================================================
+
+    // Original code
+
+    InternalKey smallest, largest;
+    compaction_picker_->GetRange(start_level_inputs_, &smallest, &largest);
+    CompactionInputFiles output_level_inputs;
+    output_level_inputs.level = output_level_;
+    vstorage_->GetOverlappingInputs(output_level_, &smallest, &largest,
+                                    &output_level_inputs.files);
 
     //==============================================================================
 
@@ -832,26 +847,26 @@ bool LevelCompactionBuilder::PickFileToCompact() {
       //==========================================================================
       // TODO: options.compaction_policy
 
-      if (!compaction_picker_->CheckingExpandInputsToCleanCutMbr(cf_name_,
-                                                      &output_level_inputs)) {
-        start_level_inputs_.clear();
-        if (ioptions_.compaction_pri == kRoundRobin) {
-          return false;
-        }
-        continue;
-      }      
-
-      //==========================================================================
-      // Original code
-      
-      // if (!compaction_picker_->ExpandInputsToCleanCut(cf_name_, vstorage_,
+      // if (!compaction_picker_->CheckingExpandInputsToCleanCutMbr(cf_name_,
       //                                                 &output_level_inputs)) {
       //   start_level_inputs_.clear();
       //   if (ioptions_.compaction_pri == kRoundRobin) {
       //     return false;
       //   }
       //   continue;
-      // }
+      // }      
+
+      //==========================================================================
+      // Original code
+      
+      if (!compaction_picker_->ExpandInputsToCleanCut(cf_name_, vstorage_,
+                                                      &output_level_inputs)) {
+        start_level_inputs_.clear();
+        if (ioptions_.compaction_pri == kRoundRobin) {
+          return false;
+        }
+        continue;
+      }
 
       //=========================================================================
     }

@@ -82,6 +82,7 @@ class MergeIteratorBuilder;
 class SystemClock;
 class ManifestTailer;
 class FilePickerMultiGet;
+struct CompactionInputFiles;
 
 // VersionEdit is always supposed to be valid and it is used to point at
 // entries in Manifest. Ideally it should not be used as a container to
@@ -248,6 +249,16 @@ class VersionStorageInfo {
   // Return idx'th highest score
   double CompactionScore(int idx) const { return compaction_score_[idx]; }
 
+  void GetOverlappingInputsWithMbr(
+    int level, const InternalKey* begin, const InternalKey* end, 
+    const std::vector<Mbr>* mbr_vect, std::vector<FileMetaData*>* inputs, 
+    ImmutableOptions ioptions, int k_num_files, 
+    int hint_index = -1, 
+    int* file_index = nullptr,
+    bool expand_range = true, 
+    InternalKey** next_smallest = nullptr) 
+    const;
+
   void GetkMaxOverlappingInputs(
     int level, const std::vector<Mbr>* mbr_vect,
     std::vector<FileMetaData*>* inputs, ImmutableOptions ioptions, int k_num_files) const;
@@ -270,6 +281,10 @@ class VersionStorageInfo {
       int hint_index = -1,        // index of overlap file
       int* file_index = nullptr)  // return index of overlap file
       const;
+
+  void GetOverlappingInputsMbr(CompactionInputFiles& new_inputs, 
+    const std::vector<Mbr>* mbr_vect, std::vector<FileMetaData*>* inputs, 
+    ImmutableOptions ioptions, int k_num_files) const;
 
   void GetOverlappingInputsBasedMbrArea(int level, 
     const std::vector<Mbr>* mbr_vect, std::vector<FileMetaData*>* inputs, 

@@ -168,13 +168,15 @@ int main(int argc, char* argv[]) {
 
             std::string key = serialize_key(id, low[0], low[1]);
 
+            std::cout << "In Key: " << id << low[0] << low[1] << std::endl;
             // Put key-value
             auto start = std::chrono::high_resolution_clock::now();
             s = db->Put(WriteOptions(), key, "");
             auto end = std::chrono::high_resolution_clock::now(); 
             auto duration = std::chrono::duration_cast<std::chrono::nanoseconds>(end - start);
             totalDuration = totalDuration + duration;
-            // assert(s.ok());
+            std::cout << "In Status: " << s.ToString() << std::endl;
+            assert(s.ok());
         }
         std::cout << "Status: " << s.ToString() << std::endl;
         assert(s.ok());
@@ -191,16 +193,18 @@ int main(int argc, char* argv[]) {
 
         db->Close();
 
+
+
         // std::cout << "RocksDB stats: " << options.statistics->ToString() << std::endl;
 
-        // std::string key1 = serialize_key(keypath, 516, 22.214);
+        // std::string key1 = serialize_key(0, 516, 22.214);
         // std::cout << "key1: " << key1 << std::endl;
 
         // // Put key-value
         // s = db->Put(WriteOptions(), key1, "");
         // assert(s.ok());
 
-        // std::string key2 = serialize_key(keypath, 1124, 4.1432);
+        // std::string key2 = serialize_key(1, 1124, 4.1432);
         // std::cout << "key2: " << key2 << std::endl;
         // s = db->Put(WriteOptions(), key2, "");
         // assert(s.ok());

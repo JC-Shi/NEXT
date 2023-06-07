@@ -4049,6 +4049,94 @@ void VersionStorageInfo::GetkMaxOverlappingInputs(
   }
 }
 
+void VersionStorageInfo::GetOverlappingInputsWithMbr(
+    int level, const InternalKey* begin, const InternalKey* end, const std::vector<Mbr>* mbr_vect,
+    std::vector<FileMetaData*>* inputs, ImmutableOptions ioptions, int k_num_files, int hint_index, int* file_index,
+    bool expand_range, InternalKey** next_smallest) const {
+  if (level >= num_non_empty_levels_) {
+    // this level is empty, no overlapping inputs
+    return;
+  }
+
+  inputs->clear();
+  if (file_index) {
+    *file_index = -1;
+  }
+  const Comparator* user_cmp = user_comparator_;
+  if (level > 0) {
+    CompactionInputFiles tmp_output_inputs;
+    GetOverlappingInputsRangeBinarySearch(level, begin, end, &tmp_output_inputs.files, hint_index,
+                                          file_index, false, next_smallest);
+
+    GetOverlappingInputsMbr(tmp_output_inputs, mbr_vect, inputs, ioptions, k_num_files);                                   
+    return;
+  }
+
+  if (next_smallest) {
+    // next_smallest key only makes sense for non-level 0, where files are
+    // non-overlapping
+    *next_smallest = nullptr;
+  }
+
+  Slice user_begin, user_end;
+  if (begin != nullptr) {
+    user_begin = begin->user_key();
+  }
+  if (end != nullptr) {
+    user_end = end->user_key();
+  }
+
+  // index stores the file index need to check.
+  std::list<size_t> index;
+  for (size_t i = 0; i < level_files_brief_[level].num_files; i++) {
+    index.emplace_back(i);
+  }
+
+  while (!index.empty()) {
+    bool found_overlapping_file = false;
+    auto iter = index.begin();
+    while (iter != index.end()) {
+      FdWithKeyRange* f = &(level_files_brief_[level].files[*iter]);
+      const Slice file_start = ExtractUserKey(f->smallest_key);
+      const Slice file_limit = ExtractUserKey(f->largest_key);
+      if (begin != nullptr &&
+          user_cmp->CompareWithoutTimestamp(file_limit, user_begin) < 0) {
+        // "f" is completely before specified range; skip it
+        iter++;
+      } else if (end != nullptr &&
+                 user_cmp->CompareWithoutTimestamp(file_start, user_end) > 0) {
+        // "f" is completely after specified range; skip it
+        iter++;
+      } else {
+        // if overlap
+        inputs->emplace_back(files_[level][*iter]);
+        found_overlapping_file = true;
+        // record the first file index.
+        if (file_index && *file_index == -1) {
+          *file_index = static_cast<int>(*iter);
+        }
+        // the related file is overlap, erase to avoid checking again.
+        iter = index.erase(iter);
+        if (expand_range) {
+          if (begin != nullptr &&
+              user_cmp->CompareWithoutTimestamp(file_start, user_begin) < 0) {
+            user_begin = file_start;
+          }
+          if (end != nullptr &&
+              user_cmp->CompareWithoutTimestamp(file_limit, user_end) > 0) {
+            user_end = file_limit;
+          }
+        }
+      }
+    }
+    // if all the files left are not overlap, break
+    if (!found_overlapping_file) {
+      break;
+    }
+  }
+}
+
+
 // Store in "*inputs" all files in "level" that overlap [begin,end]
 // If hint_index is specified, then it points to a file in the
 // overlapping range.
@@ -4215,6 +4303,62 @@ std::vector<FileMetaData*>* inputs, ImmutableOptions ioptions, int k_num_files) 
     }
     int idx = V_overlaparea_index[k].second;
     inputs->push_back(files_[level][idx]);
+  }
+
+}
+
+void VersionStorageInfo::GetOverlappingInputsMbr(CompactionInputFiles& new_inputs, const std::vector<Mbr>* mbr_vect,
+std::vector<FileMetaData*>* inputs, ImmutableOptions ioptions, int k_num_files) const {
+
+  assert(new_inputs->size() > 0);
+  const int num_files = static_cast<int>(new_inputs.size());
+  int start_index = 0;
+  int end_index = num_files;
+  int input_list_size = (int) mbr_vect->size();
+  std::vector<std::pair<double, int>> V_overlaparea_index;
+
+  for(int i=start_index; i < end_index; i++) {
+    FileMetaData* f = new_inputs[i];
+    Mbr ofile_mbr = f->mbr;
+    ROCKS_LOG_DEBUG(ioptions.logger, "OutPut Level Mbr %d:  %s", i, ofile_mbr.toString().c_str());
+    double overlapping_areas= 0.0;
+
+    for(int j=0; j < input_list_size; j++) {
+      Mbr ifile_mbr = mbr_vect->at(j);
+      overlapping_areas += GetOverlappingArea(ofile_mbr, ifile_mbr);
+    }
+
+    V_overlaparea_index.push_back(std::make_pair(overlapping_areas, i));
+  }
+
+  std::sort(V_overlaparea_index.rbegin(), V_overlaparea_index.rend());
+  
+  
+  for (int a=0; a<end_index; a++){
+     ROCKS_LOG_DEBUG(ioptions.logger, "Sorted Output Level Vectors (overlapping areas, index): %f, %d \n", V_overlaparea_index[a].first, V_overlaparea_index[a].second);
+  }
+
+  // If k_num_files == -1, this means picking all files in that level
+  int k_n_f;
+  if (k_num_files == -1) {
+    k_n_f = num_files;
+  } else {
+    k_n_f = std::min(num_files, k_num_files);
+  }
+
+  // If the largest overlapping area is 0, then no overlapped files
+  // return immediately
+  if(V_overlaparea_index[0].first == 0.0) {
+    return;
+  }
+
+  for(int k=0; k < k_n_f; k++){
+    if(V_overlaparea_index[k].first == 0.0){
+      break;
+    }
+    int idx = V_overlaparea_index[k].second;
+    FileMetaData* f1 = new_inputs[idx];
+    inputs->push_back(f1);
   }
 
 }
