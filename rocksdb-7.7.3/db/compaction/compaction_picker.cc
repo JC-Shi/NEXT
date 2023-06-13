@@ -539,6 +539,35 @@ bool CompactionPicker::SetupOtherInputs(
   // TODO: options.compaction_policy
   // ToChange: k
 
+  InternalKey smallest, largest;
+  GetRange(*inputs, &smallest, &largest);
+
+  switch(ioptions.compaction_output_selection) {
+    case OneDKeyRangeOnly:
+      // InternalKey smallest, largest;
+      // // Get the range one last time.
+      // GetRange(*inputs, &smallest, &largest);
+      // // Populate the set of next-level files (inputs_GetOutputLevelInputs()) to
+      // // include in compaction
+      vstorage->GetOverlappingInputs(output_level, &smallest, &largest,
+                                      &output_level_inputs->files, *parent_index,
+                                      parent_index);
+      break;
+
+    case kByMbrOverlappingArea:
+      // InternalKey smallest, largest;
+      // GetRange(*inputs, &smallest, &largest);
+      std::vector<Mbr> Mbr_vect;
+      GetMbrList(*inputs, &Mbr_vect);    
+      // ToChange: k
+      vstorage->GetOverlappingInputsWithMbr(output_level, &smallest, &largest,
+                                      &Mbr_vect, &output_level_inputs->files, 
+                                      ioptions, ioptions.max_compaction_output_files_selected, *parent_index, parent_index);
+      break;
+  }
+
+  // ==============================================================================
+
   // std::vector<Mbr> Mbr_vect;
   // GetMbrList(*inputs, &Mbr_vect);
   // vstorage->GetkMaxOverlappingInputs(output_level, &Mbr_vect,
@@ -554,23 +583,23 @@ bool CompactionPicker::SetupOtherInputs(
   // // ToChange: k
   // vstorage->GetOverlappingInputsWithMbr(output_level, &smallest, &largest,
   //                                 &Mbr_vect, &output_level_inputs->files, 
-  //                                 ioptions, 5, *parent_index, parent_index);
+  //                                 ioptions, 3, *parent_index, parent_index);
 
 
   // ==============================================================================
   // Original Code
 
-  (void) ioptions;
-  InternalKey smallest, largest;
+  // (void) ioptions;
+  // InternalKey smallest, largest;
 
-  // Get the range one last time.
-  GetRange(*inputs, &smallest, &largest);
+  // // Get the range one last time.
+  // GetRange(*inputs, &smallest, &largest);
 
-  // Populate the set of next-level files (inputs_GetOutputLevelInputs()) to
-  // include in compaction
-  vstorage->GetOverlappingInputs(output_level, &smallest, &largest,
-                                 &output_level_inputs->files, *parent_index,
-                                 parent_index);
+  // // Populate the set of next-level files (inputs_GetOutputLevelInputs()) to
+  // // include in compaction
+  // vstorage->GetOverlappingInputs(output_level, &smallest, &largest,
+  //                                &output_level_inputs->files, *parent_index,
+  //                                parent_index);
 
   // ===============================================================================
 
@@ -581,6 +610,26 @@ bool CompactionPicker::SetupOtherInputs(
   // ================================================================================
   // TODO: options.compaction_policy
 
+  switch(ioptions.compaction_output_selection) {
+    case OneDKeyRangeOnly:
+      if (!output_level_inputs->empty()) {
+        if (!ExpandInputsToCleanCut(cf_name, vstorage, output_level_inputs)) {
+          return false;
+        }
+      }
+      break;
+
+    case kByMbrOverlappingArea:
+      if (!output_level_inputs->empty()) {
+        if (!CheckingExpandInputsToCleanCutMbr(cf_name, output_level_inputs)) {
+          return false;
+        }
+      } 
+      break;   
+  }
+
+  // ================================================================================
+
   // if (!output_level_inputs->empty()) {
   //   if (!CheckingExpandInputsToCleanCutMbr(cf_name, output_level_inputs)) {
   //     return false;
@@ -590,11 +639,11 @@ bool CompactionPicker::SetupOtherInputs(
   // ================================================================================
   // original code
 
-  if (!output_level_inputs->empty()) {
-    if (!ExpandInputsToCleanCut(cf_name, vstorage, output_level_inputs)) {
-      return false;
-    }
-  }
+  // if (!output_level_inputs->empty()) {
+  //   if (!ExpandInputsToCleanCut(cf_name, vstorage, output_level_inputs)) {
+  //     return false;
+  //   }
+  // }
 
   // ================================================================================
   // TODO: options.compaction_policy
@@ -903,6 +952,34 @@ Compaction* CompactionPicker::CompactRange(
   InternalKey key_storage;
   InternalKey* next_smallest = &key_storage;
   // TODO: options.compaction_policy
+
+  switch (ioptions_.compaction_output_selection)
+  {
+  case OneDKeyRangeOnly:
+    if (ExpandInputsToCleanCut(cf_name, vstorage, &inputs, &next_smallest) ==
+        false) {
+      // manual compaction is now multi-threaded, so it can
+      // happen that ExpandWhileOverlapping fails
+      // we handle it higher in RunManualCompaction
+      *manual_conflict = true;
+      return nullptr;
+    }    
+    break;
+  
+  case kByMbrOverlappingArea:
+    if (CheckingExpandInputsToCleanCutMbr(cf_name, &inputs) ==
+        false) {
+      // manual compaction is now multi-threaded, so it can
+      // happen that ExpandWhileOverlapping fails
+      // we handle it higher in RunManualCompaction
+      *manual_conflict = true;
+      return nullptr;
+    }  
+    break;
+  }
+
+  // ================================================================================
+
   // if (CheckingExpandInputsToCleanCutMbr(cf_name, &inputs) ==
   //     false) {
   //   // manual compaction is now multi-threaded, so it can
@@ -913,14 +990,14 @@ Compaction* CompactionPicker::CompactRange(
   // }
 
   // original code
-  if (ExpandInputsToCleanCut(cf_name, vstorage, &inputs, &next_smallest) ==
-      false) {
-    // manual compaction is now multi-threaded, so it can
-    // happen that ExpandWhileOverlapping fails
-    // we handle it higher in RunManualCompaction
-    *manual_conflict = true;
-    return nullptr;
-  }
+  // if (ExpandInputsToCleanCut(cf_name, vstorage, &inputs, &next_smallest) ==
+  //     false) {
+  //   // manual compaction is now multi-threaded, so it can
+  //   // happen that ExpandWhileOverlapping fails
+  //   // we handle it higher in RunManualCompaction
+  //   *manual_conflict = true;
+  //   return nullptr;
+  // }
 
   //===============================================================================
 
@@ -1291,8 +1368,18 @@ void CompactionPicker::PickFilesMarkedForCompaction(
     start_level_inputs->files = {level_file.second};
     start_level_inputs->level = *start_level;
     // TODO: options.compaction_policy
+    switch (ioptions_.compaction_output_selection)
+    {    
+    case kByMbrOverlappingArea:
+      return CheckingExpandInputsToCleanCutMbr(cf_name, start_level_inputs);
+      break;
+
+    default:
+      return ExpandInputsToCleanCut(cf_name, vstorage, start_level_inputs);
+      break;
+    }
     // return CheckingExpandInputsToCleanCutMbr(cf_name, start_level_inputs);
-    return ExpandInputsToCleanCut(cf_name, vstorage, start_level_inputs);
+    // return ExpandInputsToCleanCut(cf_name, vstorage, start_level_inputs);
   };
 
   // take a chance on a random file first

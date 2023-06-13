@@ -4321,6 +4321,14 @@ std::vector<FileMetaData*>* inputs, ImmutableOptions ioptions, int k_num_files) 
   int input_list_size = (int) mbr_vect->size();
   std::vector<std::pair<double, int>> V_overlaparea_index;
 
+  if (num_files <= k_num_files) {
+    for (int i=0; i<num_files; i++) {
+      FileMetaData* f1 = new_inputs[i];
+      inputs->push_back(f1);      
+    }
+    return;
+  }
+
   for(int i=start_index; i < end_index; i++) {
     FileMetaData* f = new_inputs[i];
     Mbr ofile_mbr = f->mbr;

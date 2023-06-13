@@ -871,6 +871,7 @@ ImmutableCFOptions::ImmutableCFOptions() : ImmutableCFOptions(Options()) {}
 
 ImmutableCFOptions::ImmutableCFOptions(const ColumnFamilyOptions& cf_options)
     : compaction_style(cf_options.compaction_style),
+      compaction_output_selection(cf_options.compaction_output_selection),
       compaction_pri(cf_options.compaction_pri),
       user_comparator(cf_options.comparator),
       internal_comparator(InternalKeyComparator(cf_options.comparator)),
@@ -883,6 +884,7 @@ ImmutableCFOptions::ImmutableCFOptions(const ColumnFamilyOptions& cf_options)
           cf_options.max_write_buffer_number_to_maintain),
       max_write_buffer_size_to_maintain(
           cf_options.max_write_buffer_size_to_maintain),
+      max_compaction_output_files_selected(cf_options.max_compaction_output_files_selected),
       inplace_update_support(cf_options.inplace_update_support),
       inplace_callback(cf_options.inplace_callback),
       memtable_factory(cf_options.memtable_factory),
