@@ -14,6 +14,7 @@
 #include "rocksdb/table.h"
 #include "util/coding.h"
 #include "util/rtree.h"
+#include "util/hilbert_curve.h"
 
 
 using namespace rocksdb;
@@ -107,7 +108,8 @@ int main(int argc, char* argv[]) {
     DB* db;
     Options options;
 
-    NoiseComparator cmp;
+    // NoiseComparator cmp;
+    HilbertComparator cmp;
     options.comparator = &cmp;
 
     BlockBasedTableOptions block_based_options;
@@ -121,8 +123,8 @@ int main(int argc, char* argv[]) {
 //    block_based_options.flush_block_policy_factory.reset(
 //            new NoiseFlushBlockPolicyFactory());
     options.table_factory.reset(NewBlockBasedTableFactory(block_based_options));
-    // options.memtable_factory.reset(new rocksdb::SkipListMbrFactory);
-    options.memtable_factory.reset(new rocksdb::RTreeFactory);
+    options.memtable_factory.reset(new rocksdb::SkipListMbrFactory);
+    // options.memtable_factory.reset(new rocksdb::RTreeFactory);
     options.allow_concurrent_memtable_write = false;
 
     options.check_flush_compaction_key_order = false;
@@ -164,6 +166,9 @@ int main(int argc, char* argv[]) {
         // int count=0;
         for (it->SeekToFirst(); it->Valid(); it->Next()) {
             Key key = deserialize_key(it->key());
+            // if(i==3){
+            //     std::cout << "Return Key: " << key.mbr << std::endl;
+            // }
             // count++;
         }
         // std::cout << "# Query Results: " << count << std::endl;

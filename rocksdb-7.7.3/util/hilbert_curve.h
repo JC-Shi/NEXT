@@ -77,7 +77,12 @@ namespace rocksdb {
                 }
             }
 
-            // // Specifically for R-tree as r-tree does not implement ordering
+            // TODO: options.compaction_policy query/write
+            // Specifically for R-tree as r-tree does not implement ordering
+            // (void) hilbert_a;
+            // (void) hilbert_b;
+            // (void) value_a;
+            // (void) value_b;
             // return 1;
         }
 

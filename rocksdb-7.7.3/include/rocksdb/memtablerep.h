@@ -196,6 +196,9 @@ class MemTableRep {
   virtual void Get(const LookupKey& k, void* callback_args,
                    bool (*callback_func)(void* arg, const char* entry));
 
+  virtual void SpatialRange(const LookupKey& k, void* callback_args,
+                  bool (*callback_func)(void* arg, const char* entry));
+
   virtual uint64_t ApproximateNumEntries(const Slice& /*start_ikey*/,
                                          const Slice& /*end_key*/) {
     return 0;

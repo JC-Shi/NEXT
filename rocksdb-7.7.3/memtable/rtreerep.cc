@@ -40,6 +40,9 @@ class RtreeRep : public MemTableRep {
 
     void Get(const LookupKey& k, void* callback_args,
     bool (*callback_func)(void* arg, const char* entry)) override;
+
+    void SpatialRange(const LookupKey& k, void* callback_args,
+    bool (*callback_func)(void* arg, const char* entry)) override;    
     
     ~RtreeRep() override {}
 
@@ -222,6 +225,14 @@ const char* RtreeRep::Iterator::key() const {
 
 void RtreeRep::Get(const LookupKey& k, void* callback_args,
     bool (*callback_func)(void* arg, const char* entry)) {
+        (void) k;
+        (void) callback_args;
+        (void) callback_func;
+    }
+
+void RtreeRep::SpatialRange(const LookupKey& k, void* callback_args,
+    bool (*callback_func)(void* arg, const char* entry)) {
+        
         (void) k;
         (void) callback_args;
         (void) callback_func;

@@ -137,6 +137,11 @@ class CompactionPicker {
                                   const Slice& largest_user_key,
                                   int level) const;
 
+  //GetMbrList
+  void GetMbrList(const CompactionInputFiles& inputs,
+                                  std::vector<Mbr>* Mbr_vect) const;
+
+
   // Stores the minimal range that covers all entries in inputs in
   // *smallest, *largest.
   // REQUIRES: inputs is not empty
@@ -174,10 +179,17 @@ class CompactionPicker {
                               CompactionInputFiles* inputs,
                               InternalKey** next_smallest = nullptr);
 
+  bool CheckingExpandInputsToCleanCutMbr(const std::string& cf_name,
+                                  CompactionInputFiles* inputs);
+
   // Returns true if any one of the parent files are being compacted
   bool IsRangeInCompaction(VersionStorageInfo* vstorage,
                            const InternalKey* smallest,
                            const InternalKey* largest, int level, int* index);
+
+  bool IsRangeInCompactionMbr(VersionStorageInfo* vstorage,
+                              const std::vector<Mbr>* mbr_vect,
+                              int level, ImmutableOptions ioptions);                    
 
   // Returns true if the key range that `inputs` files cover overlap with the
   // key range of a currently running compaction.
@@ -190,6 +202,7 @@ class CompactionPicker {
                         CompactionInputFiles* inputs,
                         CompactionInputFiles* output_level_inputs,
                         int* parent_index, int base_index,
+                        ImmutableOptions ioptions,
                         bool only_expand_towards_right = false);
 
   void GetGrandparents(VersionStorageInfo* vstorage,
@@ -204,7 +217,7 @@ class CompactionPicker {
 
   bool GetOverlappingL0Files(VersionStorageInfo* vstorage,
                              CompactionInputFiles* start_level_inputs,
-                             int output_level, int* parent_index);
+                             int output_level, int* parent_index, ImmutableOptions ioptions);
 
   // Register this compaction in the set of running compactions
   void RegisterCompaction(Compaction* c);

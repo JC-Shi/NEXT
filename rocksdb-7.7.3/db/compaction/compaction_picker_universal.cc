@@ -1048,7 +1048,7 @@ Compaction* UniversalCompactionBuilder::PickIncrementalForReduceSizeAmp(
   if (!picker_->SetupOtherInputs(cf_name_, mutable_cf_options_, vstorage_,
                                  &second_last_level_inputs,
                                  &bottom_level_inputs, &parent_index,
-                                 /*base_index=*/-1)) {
+                                 /*base_index=*/-1, ioptions_)) {
     return nullptr;
   }
 
@@ -1192,7 +1192,7 @@ Compaction* UniversalCompactionBuilder::PickDeleteTriggeredCompaction() {
     if (output_level != 0) {
       if (start_level == 0) {
         if (!picker_->GetOverlappingL0Files(vstorage_, &start_level_inputs,
-                                            output_level, nullptr)) {
+                                            output_level, nullptr, ioptions_)) {
           return nullptr;
         }
       }
@@ -1203,7 +1203,7 @@ Compaction* UniversalCompactionBuilder::PickDeleteTriggeredCompaction() {
       output_level_inputs.level = output_level;
       if (!picker_->SetupOtherInputs(cf_name_, mutable_cf_options_, vstorage_,
                                      &start_level_inputs, &output_level_inputs,
-                                     &parent_index, -1)) {
+                                     &parent_index, -1, ioptions_)) {
         return nullptr;
       }
       inputs.push_back(start_level_inputs);

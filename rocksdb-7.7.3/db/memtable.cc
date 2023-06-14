@@ -1129,6 +1129,7 @@ static bool SaveValue(void* arg, const char* entry) {
   return false;
 }
 
+// SearchGet()
 bool MemTable::Get(const LookupKey& key, std::string* value,
                    PinnableWideColumns* columns, std::string* timestamp,
                    Status* s, MergeContext* merge_context,
@@ -1197,6 +1198,74 @@ bool MemTable::Get(const LookupKey& key, std::string* value,
   return found_final_value;
 }
 
+bool MemTable::SpatialRange(const LookupKey& key, std::string* value,
+                   PinnableWideColumns* columns, std::string* timestamp,
+                   Status* s, MergeContext* merge_context,
+                   SequenceNumber* max_covering_tombstone_seq,
+                   SequenceNumber* seq, const ReadOptions& read_opts,
+                   bool immutable_memtable, ReadCallback* callback,
+                   bool* is_blob_index, bool do_merge) {
+  // The sequence number is updated synchronously in version_set.h
+  if (IsEmpty()) {
+    // Avoiding recording stats for speed.
+    return false;
+  }
+  PERF_TIMER_GUARD(get_from_memtable_time);
+
+  std::unique_ptr<FragmentedRangeTombstoneIterator> range_del_iter(
+      NewRangeTombstoneIterator(read_opts,
+                                GetInternalKeySeqno(key.internal_key()),
+                                immutable_memtable));
+  if (range_del_iter != nullptr) {
+    *max_covering_tombstone_seq =
+        std::max(*max_covering_tombstone_seq,
+                 range_del_iter->MaxCoveringTombstoneSeqnum(key.user_key()));
+  }
+
+  bool found_final_value = false;
+  bool merge_in_progress = s->IsMergeInProgress();
+  bool may_contain = true;
+  size_t ts_sz = GetInternalKeyComparator().user_comparator()->timestamp_size();
+  Slice user_key_without_ts = StripTimestampFromUserKey(key.user_key(), ts_sz);
+  bool bloom_checked = false;
+  if (bloom_filter_) {
+    // when both memtable_whole_key_filtering and prefix_extractor_ are set,
+    // only do whole key filtering for Get() to save CPU
+    if (moptions_.memtable_whole_key_filtering) {
+      may_contain = bloom_filter_->MayContain(user_key_without_ts);
+      bloom_checked = true;
+    } else {
+      assert(prefix_extractor_);
+      if (prefix_extractor_->InDomain(user_key_without_ts)) {
+        may_contain = bloom_filter_->MayContain(
+            prefix_extractor_->Transform(user_key_without_ts));
+        bloom_checked = true;
+      }
+    }
+  }
+
+  if (bloom_filter_ && !may_contain) {
+    // iter is null if prefix bloom says the key does not exist
+    PERF_COUNTER_ADD(bloom_memtable_miss_count, 1);
+    *seq = kMaxSequenceNumber;
+  } else {
+    if (bloom_checked) {
+      PERF_COUNTER_ADD(bloom_memtable_hit_count, 1);
+    }
+    SpatialRangeFromTable(key, *max_covering_tombstone_seq, do_merge, callback,
+                 is_blob_index, value, columns, timestamp, s, merge_context,
+                 seq, &found_final_value, &merge_in_progress);
+  }
+
+  // No change to value, since we have not yet found a Put/Delete
+  // Propagate corruption error
+  if (!found_final_value && merge_in_progress && !s->IsCorruption()) {
+    *s = Status::MergeInProgress();
+  }
+  PERF_COUNTER_ADD(get_from_memtable_count, 1);
+  return found_final_value;
+}
+
 void MemTable::GetFromTable(const LookupKey& key,
                             SequenceNumber max_covering_tombstone_seq,
                             bool do_merge, ReadCallback* callback,
@@ -1228,6 +1297,40 @@ void MemTable::GetFromTable(const LookupKey& key,
   saver.allow_data_in_errors = moptions_.allow_data_in_errors;
   saver.protection_bytes_per_key = moptions_.protection_bytes_per_key;
   table_->Get(key, &saver, SaveValue);
+  *seq = saver.seq;
+}
+
+void MemTable::SpatialRangeFromTable(const LookupKey& key,
+                            SequenceNumber max_covering_tombstone_seq,
+                            bool do_merge, ReadCallback* callback,
+                            bool* is_blob_index, std::string* value,
+                            PinnableWideColumns* columns,
+                            std::string* timestamp, Status* s,
+                            MergeContext* merge_context, SequenceNumber* seq,
+                            bool* found_final_value, bool* merge_in_progress) {
+  Saver saver;
+  saver.status = s;
+  saver.found_final_value = found_final_value;
+  saver.merge_in_progress = merge_in_progress;
+  saver.key = &key;
+  saver.value = value;
+  saver.columns = columns;
+  saver.timestamp = timestamp;
+  saver.seq = kMaxSequenceNumber;
+  saver.mem = this;
+  saver.merge_context = merge_context;
+  saver.max_covering_tombstone_seq = max_covering_tombstone_seq;
+  saver.merge_operator = moptions_.merge_operator;
+  saver.logger = moptions_.info_log;
+  saver.inplace_update_support = moptions_.inplace_update_support;
+  saver.statistics = moptions_.statistics;
+  saver.clock = clock_;
+  saver.callback_ = callback;
+  saver.is_blob_index = is_blob_index;
+  saver.do_merge = do_merge;
+  saver.allow_data_in_errors = moptions_.allow_data_in_errors;
+  saver.protection_bytes_per_key = moptions_.protection_bytes_per_key;
+  table_->SpatialRange(key, &saver, SaveValue);
   *seq = saver.seq;
 }
 
@@ -1513,6 +1616,14 @@ void MemTableRep::Get(const LookupKey& k, void* callback_args,
        iter->Valid() && callback_func(callback_args, iter->key());
        iter->Next()) {
   }
+}
+
+void MemTableRep::SpatialRange(const LookupKey& k, void* callback_args,
+                      bool (*callback_func)(void* arg, const char* entry)) {
+  std::cout << "spatialRange()" << std::endl;
+  (void) k;
+  (void) callback_args;
+  (void) callback_func;
 }
 
 void MemTable::RefLogContainingPrepSection(uint64_t log) {

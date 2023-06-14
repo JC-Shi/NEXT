@@ -47,6 +47,7 @@ AdvancedColumnFamilyOptions::AdvancedColumnFamilyOptions(const Options& options)
           options.max_write_buffer_number_to_maintain),
       max_write_buffer_size_to_maintain(
           options.max_write_buffer_size_to_maintain),
+      max_compaction_output_files_selected(options.max_compaction_output_files_selected),
       inplace_update_support(options.inplace_update_support),
       inplace_update_num_locks(options.inplace_update_num_locks),
       experimental_mempurge_threshold(options.experimental_mempurge_threshold),
@@ -76,6 +77,7 @@ AdvancedColumnFamilyOptions::AdvancedColumnFamilyOptions(const Options& options)
       hard_pending_compaction_bytes_limit(
           options.hard_pending_compaction_bytes_limit),
       compaction_style(options.compaction_style),
+      compaction_output_selection(options.compaction_output_selection),
       compaction_pri(options.compaction_pri),
       compaction_options_universal(options.compaction_options_universal),
       compaction_options_fifo(options.compaction_options_fifo),
@@ -547,6 +549,8 @@ ColumnFamilyOptions* ColumnFamilyOptions::OldDefaults(
   if (rocksdb_major_version < 5 ||
       (rocksdb_major_version == 5 && rocksdb_minor_version <= 18)) {
     compaction_pri = CompactionPri::kByCompensatedSize;
+    // Add new option
+    compaction_output_selection = CompactionOutputLevelSelection::OneDKeyRangeOnly;
   }
   if (rocksdb_major_version < 4 ||
       (rocksdb_major_version == 4 && rocksdb_minor_version < 7)) {

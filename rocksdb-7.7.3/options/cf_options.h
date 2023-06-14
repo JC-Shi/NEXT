@@ -27,6 +27,9 @@ struct ImmutableCFOptions {
 
   CompactionStyle compaction_style;
 
+  // add mew option
+  CompactionOutputLevelSelection compaction_output_selection;
+
   CompactionPri compaction_pri;
 
   const Comparator* user_comparator;
@@ -43,6 +46,8 @@ struct ImmutableCFOptions {
   int max_write_buffer_number_to_maintain;
 
   int64_t max_write_buffer_size_to_maintain;
+
+  int max_compaction_output_files_selected;
 
   bool inplace_update_support;
 

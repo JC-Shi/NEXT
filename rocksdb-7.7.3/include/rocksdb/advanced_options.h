@@ -38,6 +38,17 @@ enum CompactionStyle : char {
   kCompactionStyleNone = 0x3,
 };
 
+// Add new option
+// In Level-based compaction, it Determines which file from the output level to be 
+// picked to merge with the start level. Default is the one dimensional key range.
+enum CompactionOutputLevelSelection : char {
+  // all files in output level that are overlapped with start level files
+  OneDKeyRangeOnly = 0x0,
+  // The output level files will be sorted based on the overlapping areas
+  // K (self-defined) largest overlapped files will be picked for compaction.
+  kByMbrOverlappingArea = 0x1,
+};
+
 // In Level-based compaction, it Determines which file from a level to be
 // picked to merge to the next level. We suggest people try
 // kMinOverlappingRatio first when you tune your database.
@@ -60,6 +71,8 @@ enum CompactionPri : char {
   // level. The file picking process will cycle through all the files in a
   // round-robin manner.
   kRoundRobin = 0x4,
+  kMinMbr = 0x5,
+  kMaxMbr = 0x6,
 };
 
 struct CompactionOptionsFIFO {
@@ -332,6 +345,8 @@ struct AdvancedColumnFamilyOptions {
   // be set to the value of 'max_write_buffer_number * write_buffer_size'
   // if it is not explicitly set by the user.  Otherwise, the default is 0.
   int64_t max_write_buffer_size_to_maintain = 0;
+
+  int max_compaction_output_files_selected = 1;
 
   // Allows thread-safe inplace updates. If this is true, there is no way to
   // achieve point-in-time consistency using snapshot or iterator (assuming
@@ -693,6 +708,9 @@ struct AdvancedColumnFamilyOptions {
 
   // The compaction style. Default: kCompactionStyleLevel
   CompactionStyle compaction_style = kCompactionStyleLevel;
+
+  // Add new option
+  CompactionOutputLevelSelection compaction_output_selection = OneDKeyRangeOnly;
 
   // If level compaction_style = kCompactionStyleLevel, for each level,
   // which files are prioritized to be picked to compact.
