@@ -18,6 +18,7 @@
 #include "util/coding.h"
 #include "util/rtree.h"
 #include "util/hilbert_curve.h"
+#include "util/z_curve.h"
 
 
 using namespace rocksdb;
@@ -112,7 +113,9 @@ int main(int argc, char* argv[]) {
     DB* db;
     Options options;
 
-    HilbertComparator cmp;
+    ZComparator cmp;
+    // ZComparator cmp;
+    // NoiseComparator cmp;
     options.comparator = &cmp;
 
     options.info_log_level = DEBUG_LEVEL;
@@ -120,7 +123,8 @@ int main(int argc, char* argv[]) {
     options.compaction_pri = kMinMbr;
     std::cout << "compatction_pri = " << options.compaction_pri << std::endl;
     // options.stats_dump_period_sec = 5;
-    options.compaction_output_selection = kByMbrOverlappingArea;
+    // options.compaction_output_selection = kByMbrOverlappingArea;
+    options.compaction_output_selection = OneDKeyRangeOnly;
 
     // Setting k using the max_compaction_output_files_selected
     // k is the number of files in the output level selected for compaction

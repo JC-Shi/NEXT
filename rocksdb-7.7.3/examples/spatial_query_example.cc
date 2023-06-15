@@ -18,6 +18,7 @@
 #include "util/coding.h"
 #include "util/rtree.h"
 #include "util/hilbert_curve.h"
+#include "util/z_curve.h"
 
 
 using namespace rocksdb;
@@ -143,6 +144,29 @@ int main() {
     options.memtable_factory.reset(new rocksdb::SkipListMbrFactory);
     // options.allow_concurrent_memtable_write = false;
 
+    for (int x1 = 0; x1 < 16; x1++) {
+        for (int y1 = 0; y1 < 16; y1++) {
+            for (int x2 = 0; x2 < 16; x2++) {
+                for (int y2 = 0; y2 < 16; y2++) {
+                    uint32_t z1 = xy2z(4, x1, y1);
+                    uint32_t z2 = xy2z(4, x2, y2);
+                    if ((z1 > z2) && (comp_z_order(x1, y1, x2, y2) != 1)) {
+                        // std::cout << x1 << y1
+                        std::cout << "error!";
+                    }
+                    if ((z1 < z2) && (comp_z_order(x1, y1, x2, y2) != -1)) {
+                        std::cout << "error!";
+                    }
+                    if ((z1 == z2) && (comp_z_order(x1, y1, x2, y2) != 0)) {
+                        std::cout << "error!";
+                    }
+                }
+            }
+        }
+    }
+
+
+
     Status s;
     s = DB::Open(options, kDBPath, &db);
     std::cout << "Open DB status: " << s.ToString() << std::endl;
@@ -227,7 +251,7 @@ int main() {
     //     //     std::cout << "Results: " << key.mbr << std::endl;
     //     // }
 
-    }
+    // }
     std::string key1 = serialize_key(1, 18.6598102, 73.4636206);
     // s = db->Get(read_options, key1, &value);
     // std::cout<< s.ToString() << std::endl;

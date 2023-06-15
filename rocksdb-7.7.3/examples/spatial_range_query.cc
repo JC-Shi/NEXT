@@ -15,6 +15,7 @@
 #include "util/coding.h"
 #include "util/rtree.h"
 #include "util/hilbert_curve.h"
+#include "util/z_curve.h"
 
 
 using namespace rocksdb;
@@ -109,7 +110,7 @@ int main(int argc, char* argv[]) {
     Options options;
 
     // NoiseComparator cmp;
-    HilbertComparator cmp;
+    ZComparator cmp;
     options.comparator = &cmp;
 
     BlockBasedTableOptions block_based_options;
