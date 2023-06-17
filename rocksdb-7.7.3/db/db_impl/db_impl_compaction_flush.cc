@@ -1687,6 +1687,7 @@ Status DBImpl::ReFitLevel(ColumnFamilyData* cfd, int level, int target_level) {
 
     VersionEdit edit;
     edit.SetColumnFamily(cfd->GetID());
+    // jingyi
     for (const auto& f : vstorage->LevelFiles(level)) {
       edit.DeleteFile(level, f->fd.GetNumber());
       edit.AddFile(
@@ -1694,7 +1695,7 @@ Status DBImpl::ReFitLevel(ColumnFamilyData* cfd, int level, int target_level) {
           f->smallest, f->largest, f->fd.smallest_seqno, f->fd.largest_seqno,
           f->marked_for_compaction, f->temperature, f->oldest_blob_file_number,
           f->oldest_ancester_time, f->file_creation_time, f->file_checksum,
-          f->file_checksum_func_name, f->unique_id, f->mbr);
+          f->file_checksum_func_name, f->unique_id, f->mbr, f->sketch);
     }
     ROCKS_LOG_DEBUG(immutable_db_options_.info_log,
                     "[%s] Apply version edit:\n%s", cfd->GetName().c_str(),
@@ -3314,13 +3315,14 @@ Status DBImpl::BackgroundCompaction(bool* made_progress,
       for (size_t i = 0; i < c->num_input_files(l); i++) {
         FileMetaData* f = c->input(l, i);
         c->edit()->DeleteFile(c->level(l), f->fd.GetNumber());
+        // jingyi
         c->edit()->AddFile(
             c->output_level(), f->fd.GetNumber(), f->fd.GetPathId(),
             f->fd.GetFileSize(), f->smallest, f->largest, f->fd.smallest_seqno,
             f->fd.largest_seqno, f->marked_for_compaction, f->temperature,
             f->oldest_blob_file_number, f->oldest_ancester_time,
             f->file_creation_time, f->file_checksum, f->file_checksum_func_name,
-            f->unique_id, f->mbr);
+            f->unique_id, f->mbr, f->sketch);
 
         ROCKS_LOG_BUFFER(
             log_buffer,
