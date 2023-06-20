@@ -509,7 +509,7 @@ Compaction* LevelCompactionBuilder::PickCompaction() {
 
   ROCKS_LOG_DEBUG(ioptions_.logger, "output_level_inputs after two Needed(): \n");
   for (auto file:output_level_inputs_.files) {
-      ROCKS_LOG_DEBUG(ioptions_.logger, "File MBR: %s\n", file->mbr.toString().c_str());
+      ROCKS_LOG_DEBUG(ioptions_.logger, "File MBR: %s\n, File sketch: %s\n", file->mbr.toString().c_str(), file->sketch.toString().c_str());
   }
 
   // Form a compaction object containing the files we picked.

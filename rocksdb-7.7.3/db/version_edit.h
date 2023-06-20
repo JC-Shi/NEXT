@@ -170,7 +170,9 @@ struct FileMetaData {
   InternalKey smallest;            // Smallest internal key served by table
   InternalKey largest;             // Largest internal key served by table
 
+  // jing
   Mbr mbr;                         // MBR of the SST file
+  SpatialSketch sketch;            // spatial sketch of the SST file for cost estimation
 
   // Needs to be disposed when refs becomes 0.
   Cache::Handle* table_reader_handle = nullptr;
@@ -247,9 +249,10 @@ struct FileMetaData {
     TEST_SYNC_POINT_CALLBACK("FileMetaData::FileMetaData", this);
   }
 
+  // jingyi
   FileMetaData(uint64_t file, uint32_t file_path_id, uint64_t file_size,
                const InternalKey& smallest_key, const InternalKey& largest_key,
-               const Mbr& _mbr, const SequenceNumber& smallest_seq,
+               const Mbr& _mbr, const SpatialSketch& _sketch, const SequenceNumber& smallest_seq,
                const SequenceNumber& largest_seq, bool marked_for_compact,
                Temperature _temperature, uint64_t oldest_blob_file,
                uint64_t _oldest_ancester_time, uint64_t _file_creation_time,
@@ -260,6 +263,7 @@ struct FileMetaData {
         smallest(smallest_key),
         largest(largest_key),
         mbr(_mbr),
+        sketch(_sketch),
         marked_for_compaction(marked_for_compact),
         temperature(_temperature),
         oldest_blob_file_number(oldest_blob_file),
@@ -467,6 +471,7 @@ class VersionEdit {
     }
   }
 
+  // jingyi
   void AddFile(int level, uint64_t file, uint32_t file_path_id,
                uint64_t file_size, const InternalKey& smallest,
                const InternalKey& largest, const SequenceNumber& smallest_seqno,
@@ -475,11 +480,11 @@ class VersionEdit {
                uint64_t oldest_ancester_time, uint64_t file_creation_time,
                const std::string& file_checksum,
                const std::string& file_checksum_func_name,
-               const UniqueId64x2& unique_id, Mbr mbr) {
+               const UniqueId64x2& unique_id, Mbr mbr, SpatialSketch sketch) {
     assert(smallest_seqno <= largest_seqno);
     new_files_.emplace_back(
         level,
-        FileMetaData(file, file_path_id, file_size, smallest, largest, mbr,
+        FileMetaData(file, file_path_id, file_size, smallest, largest, mbr, sketch,
                      smallest_seqno, largest_seqno, marked_for_compaction,
                      temperature, oldest_blob_file_number, oldest_ancester_time,
                      file_creation_time, file_checksum, file_checksum_func_name,

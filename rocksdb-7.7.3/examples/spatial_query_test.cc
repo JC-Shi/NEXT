@@ -15,6 +15,7 @@
 #include "util/coding.h"
 #include "util/rtree.h"
 #include "util/hilbert_curve.h"
+#include "util/z_curve.h"
 
 
 using namespace rocksdb;
@@ -108,7 +109,7 @@ int main(int argc, char* argv[]) {
     DB* db;
     Options options;
 
-    HilbertComparator cmp;
+    ZComparator cmp;
     options.comparator = &cmp;
 
     options.info_log_level = DEBUG_LEVEL;
@@ -123,9 +124,9 @@ int main(int argc, char* argv[]) {
 //    block_based_options.flush_block_policy_factory.reset(
 //            new NoiseFlushBlockPolicyFactory());
     options.table_factory.reset(NewBlockBasedTableFactory(block_based_options));
-    // options.memtable_factory.reset(new rocksdb::SkipListMbrFactory);
-    options.memtable_factory.reset(new rocksdb::RTreeFactory);
-    options.allow_concurrent_memtable_write = false;
+    options.memtable_factory.reset(new rocksdb::SkipListMbrFactory);
+    // options.memtable_factory.reset(new rocksdb::RTreeFactory);
+    // options.allow_concurrent_memtable_write = false;
 
     options.check_flush_compaction_key_order = false;
     options.force_consistency_checks = false;

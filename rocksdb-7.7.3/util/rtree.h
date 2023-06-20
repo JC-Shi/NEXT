@@ -8,6 +8,8 @@
 #pragma once
 #include <ostream>
 #include <sstream>
+#include <algorithm>
+#include <math.h>
 
 #include "rocksdb/options.h"
 
@@ -102,6 +104,66 @@ namespace rocksdb {
 
     private:
         bool isempty_;
+    };
+
+    class SpatialSketch {
+    public:
+        SpatialSketch() {
+            x_min_ = -12.2304942;
+            x_max_ = 37.4497039;
+            y_min_ = 50.0218541;
+            y_max_ = 125.9548288;
+            for(int i = 0; i < ROWS; i++) {
+                for(int j = 0; j < COLS; j++) {
+                    density_map_[i][j] = 0;
+                }
+            }
+        }
+        // SpatialSketch(double x_min, double x_max, double y_min, double y_max) {
+        //     x_min_ = x_min;
+        //     x_max_ = x_max;
+        //     y_min_ = y_min;
+        //     y_max_ = y_max;
+        //     for(int i = 0; i < ROWS; i++) {
+        //         for(int j = 0; j < COLS; j++) {
+        //             density_map_[i][j] = 0;
+        //         }
+        //     }
+        // }
+
+        void addMbr(Mbr mbr) {
+            double x_center = (mbr.first.min + mbr.first.max) / 2;
+            double y_center = (mbr.second.min + mbr.second.max) / 2;
+
+            int x_int = std::min(int(floor((x_center - x_min_)  / ((x_max_ - x_min_) / ROWS))), ROWS-1);
+            int y_int = std::min(int(floor((y_center - y_min_)  / ((y_max_ - y_min_) / COLS))), COLS-1);
+            density_map_[x_int][y_int] += 1;
+        }
+
+        friend std::ostream& operator<<(std::ostream& os, const SpatialSketch& sketch) {
+            for (int i = 0; i < ROWS; i++) {
+                for (int j = 0; j < ROWS; j++) {
+                    os << sketch.density_map_[i][j] << " ";
+                }
+                os << std::endl;
+            }
+            return os;
+        };
+
+        std::string toString() const {
+            std::stringstream ss;
+            ss << (*this);
+            return ss.str();
+        }
+
+    private:
+        static const int ROWS = 16;
+        static const int COLS = 16;
+        uint32_t density_map_[ROWS][COLS];
+        double x_min_;
+        double x_max_;
+        double y_min_;
+        double y_max_;
     };
 
     struct Rect {
