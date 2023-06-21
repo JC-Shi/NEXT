@@ -6731,9 +6731,33 @@ InternalIterator* VersionSet::MakeInputIterator(
   // Level-0 files have to be merged together.  For other levels,
   // we will make a concatenating iterator per level.
   // TODO(opt): use concatenating iterator for level-0 if there is no overlap
-  const size_t space = (c->level() == 0 ? c->input_levels(0)->num_files +
-                                              c->num_input_levels() - 1
-                                        : c->num_input_levels());
+  size_t total_n_files = 0;
+  switch (c->immutable_options()->compaction_output_selection) {
+
+    case kByMbrOverlappingArea: 
+      for (size_t compact_l = 0; compact_l < c->num_input_levels(); compact_l++) {
+        total_n_files += c->input_levels(compact_l)->num_files;
+      }   
+      break;
+    
+
+    case OneDKeyRangeOnly:
+      if (c->level()==0){
+        total_n_files += c->input_levels(0)->num_files;
+        total_n_files += c->num_input_levels();
+        total_n_files -= 1;
+      } else {
+        total_n_files += c->num_input_levels();
+      }
+      break;
+  }
+  const size_t space = total_n_files;
+  ROCKS_LOG_DEBUG(db_options_->info_log, "Total Numbers of Iterators: %d\n", static_cast<int>(total_n_files));
+
+  // const size_t space = (c->level() == 0 ? c->input_levels(0)->num_files +
+  //                                             c->num_input_levels() - 1
+  //                                       : c->num_input_levels());
+
   InternalIterator** list = new InternalIterator* [space];
   size_t num = 0;
   for (size_t which = 0; which < c->num_input_levels(); which++) {
@@ -6771,16 +6795,76 @@ InternalIterator* VersionSet::MakeInputIterator(
               /*allow_unprepared_value=*/false);
         }
       } else {
-        // Create concatenating iterator for the files from this level
-        list[num++] = new LevelIterator(
-            cfd->table_cache(), read_options, file_options_compactions,
-            cfd->internal_comparator(), c->input_levels(which),
-            c->mutable_cf_options()->prefix_extractor,
-            /*should_sample=*/false,
-            /*no per level latency histogram=*/nullptr,
-            TableReaderCaller::kCompaction, /*skip_filters=*/false,
-            /*level=*/static_cast<int>(c->level(which)), range_del_agg,
-            c->boundaries(which));
+
+        switch (c->immutable_options()->compaction_output_selection) {
+          
+          case kByMbrOverlappingArea:{
+
+            ROCKS_LOG_DEBUG(db_options_->info_log, 
+            "Compaction Output selection Policy %d used in InputerIteractor \n",
+            c->immutable_options()->compaction_output_selection);
+
+            const LevelFilesBrief* flevel = c->input_levels(which);
+            for (size_t i = 0; i < flevel->num_files; i++) {
+              const FileMetaData& fmd = *flevel->files[i].file_metadata;
+              if (start.has_value() &&
+                  cfd->user_comparator()->CompareWithoutTimestamp(
+                      start.value(), fmd.largest.user_key()) > 0) {
+                continue;
+              }
+              // We should be able to filter out the case where the end key
+              // equals to the end boundary, since the end key is exclusive.
+              // We try to be extra safe here.
+              if (end.has_value() &&
+                  cfd->user_comparator()->CompareWithoutTimestamp(
+                      end.value(), fmd.smallest.user_key()) < 0) {
+                continue;
+              }
+
+              list[num++] = cfd->table_cache()->NewIterator(
+                  read_options, file_options_compactions,
+                  cfd->internal_comparator(), fmd, range_del_agg,
+                  c->mutable_cf_options()->prefix_extractor,
+                  /*table_reader_ptr=*/nullptr,
+                  /*file_read_hist=*/nullptr, TableReaderCaller::kCompaction,
+                  /*arena=*/nullptr,
+                  /*skip_filters=*/false,
+                  /*level=*/static_cast<int>(c->level(which)),
+                  MaxFileSizeForL0MetaPin(*c->mutable_cf_options()),
+                  /*smallest_compaction_key=*/nullptr,
+                  /*largest_compaction_key=*/nullptr,
+                  /*allow_unprepared_value=*/false);
+            }   
+            break;}   
+
+          case OneDKeyRangeOnly:
+
+            ROCKS_LOG_DEBUG(db_options_->info_log, 
+            "Compaction Output selection Policy %d used in InputerIteractor \n",
+            c->immutable_options()->compaction_output_selection);
+
+            list[num++] = new LevelIterator(
+                cfd->table_cache(), read_options, file_options_compactions,
+                cfd->internal_comparator(), c->input_levels(which),
+                c->mutable_cf_options()->prefix_extractor,
+                /*should_sample=*/false,
+                /*no per level latency histogram=*/nullptr,
+                TableReaderCaller::kCompaction, /*skip_filters=*/false,
+                /*level=*/static_cast<int>(c->level(which)), range_del_agg,
+                c->boundaries(which));
+            break;
+
+        }
+        // // Create concatenating iterator for the files from this level
+        // list[num++] = new LevelIterator(
+        //     cfd->table_cache(), read_options, file_options_compactions,
+        //     cfd->internal_comparator(), c->input_levels(which),
+        //     c->mutable_cf_options()->prefix_extractor,
+        //     /*should_sample=*/false,
+        //     /*no per level latency histogram=*/nullptr,
+        //     TableReaderCaller::kCompaction, /*skip_filters=*/false,
+        //     /*level=*/static_cast<int>(c->level(which)), range_del_agg,
+        //     c->boundaries(which));
       }
     }
   }
