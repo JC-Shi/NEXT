@@ -73,7 +73,7 @@ namespace rocksdb {
             double x_max = 37.4497039;
             double y_min = 50.0218541;
             double y_max = 125.9548288;
-            int m = 11;
+            // int m = 11;
             int n = 2048;
 
             uint32_t x_a_int = std::min(int(floor((x_a - x_min)  / ((x_max - x_min) / n))), n-1);
@@ -85,7 +85,7 @@ namespace rocksdb {
             // if (x_a_int < 0 || x_a_int > 2047 || y_a_int < 0 || y_a_int > 2047 || x_b_int < 0 || x_b_int > 2047 || y_b_int < 0 || y_b_int > 2047) {
             //     std::cout << "error!" << std::endl;
             // }
-            uint32_t bit = 1;
+            // uint32_t bit = 1;
 
             int comp = comp_z_order(x_a_int, y_a_int, x_b_int, y_b_int);
             if (comp != 0) {

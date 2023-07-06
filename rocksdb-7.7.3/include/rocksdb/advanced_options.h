@@ -47,6 +47,10 @@ enum CompactionOutputLevelSelection : char {
   // The output level files will be sorted based on the overlapping areas
   // K (self-defined) largest overlapped files will be picked for compaction.
   kByMbrOverlappingArea = 0x1,
+  // The output level files will be sorted based on the score from a score function,
+  // the score function is based on the change in area and perimeter of the sketch.
+  // A sketch is a grid map which simulate the mbr and the change in mbr.
+  kByScoreFunction = 0x2,
 };
 
 // In Level-based compaction, it Determines which file from a level to be

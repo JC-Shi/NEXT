@@ -186,7 +186,7 @@ void LevelCompactionBuilder::PickFileToCompact(
         }
         break;
 
-      case kByMbrOverlappingArea:
+      case kByMbrOverlappingArea: case kByScoreFunction:
         if (compaction_picker_->CheckingExpandInputsToCleanCutMbr(cf_name_,
                                                       &start_level_inputs_)) {
           return;
@@ -802,7 +802,7 @@ bool LevelCompactionBuilder::PickFileToCompact() {
         }
         break;
 
-      case kByMbrOverlappingArea:
+      case kByMbrOverlappingArea: case kByScoreFunction:
         if (!compaction_picker_->CheckingExpandInputsToCleanCutMbr(cf_name_,
                                                         &start_level_inputs_) ||
             compaction_picker_->FilesRangeOverlapWithCompaction(
@@ -880,7 +880,7 @@ bool LevelCompactionBuilder::PickFileToCompact() {
                                         &output_level_inputs.files);
         break;
 
-      case kByMbrOverlappingArea:
+      case kByMbrOverlappingArea:{
         // InternalKey smallest, largest;
         // compaction_picker_->GetRange(start_level_inputs_, &smallest, &largest);
         // CompactionInputFiles output_level_inputs;
@@ -891,6 +891,19 @@ bool LevelCompactionBuilder::PickFileToCompact() {
         vstorage_->GetOverlappingInputsWithMbr(output_level_, &smallest, &largest,
                                         &Mbr_vect, &output_level_inputs.files, 
                                         ioptions_, ioptions_.max_compaction_output_files_selected);   
+        break;}
+
+      case kByScoreFunction:
+        SpatialSketch input_sketch_sum;
+        int input_lvl_area;
+        int input_lvl_perimeter;
+        int input_num_files;
+        compaction_picker_->GetInputsSketchs(start_level_inputs_, &input_sketch_sum,
+                              input_num_files, input_lvl_area, input_lvl_perimeter);
+        vstorage_->GetOverlappingInputsWithScoreFunction(output_level_, &smallest, &largest,
+                    input_sketch_sum, &output_level_inputs.files, ioptions_, 
+                    ioptions_.max_compaction_output_files_selected, input_num_files,
+                    input_lvl_area, input_lvl_perimeter);
         break;
     }
 
@@ -959,7 +972,7 @@ bool LevelCompactionBuilder::PickFileToCompact() {
           }
         break;
 
-        case kByMbrOverlappingArea:
+        case kByMbrOverlappingArea: case kByScoreFunction:
           if (!compaction_picker_->CheckingExpandInputsToCleanCutMbr(cf_name_,
                                                 &output_level_inputs)) {
             start_level_inputs_.clear();

@@ -15,8 +15,48 @@
 
 namespace rocksdb {
 
-// There's an interval (which might be collapsed to a point) for every
-// dimension
+    // struct SketchPoint
+    // {
+    //     uint32_t x_pos;
+    //     uint32_t y_pos;
+    //     uint32_t count;
+        
+
+    //     SketchPoint(uint32_t x, uint32_t y, uint32_t value):
+    //         x_pos(x), y_pos(y), count(value) {}
+
+    //     ~SketchPoint() {}
+        
+    //     bool operator < (const SketchPoint&  SketchPointObj) const {
+
+    //         if(((x_pos ^ y_pos) < (SketchPointObj.x_pos ^ SketchPointObj.y_pos)) && 
+    //         ((x_pos ^ y_pos) < ((x_pos ^ y_pos) ^ (SketchPointObj.x_pos ^ SketchPointObj.y_pos)))) {
+    //             if(y_pos < SketchPointObj.y_pos) {
+    //                 return true;
+    //             } else {
+    //                 return false;
+    //             }
+    //         }
+    //         if(x_pos <  SketchPointObj.x_pos) {
+    //             return true;
+    //         } else {
+    //             return false;
+    //         }
+    //         return false;
+
+    //         // int z_comp = comp_z_order(x_pos, y_pos, SketchPointObj.x_pos, 
+    //         //                             SketchPointObj.y_pos);
+    //         // if (z_comp == -1) {
+    //         //     return true;
+    //         // } else {
+    //         //     return false;
+    //         // }
+    //     }
+    // };
+    
+
+    // There's an interval (which might be collapsed to a point) for every
+    // dimension
     struct Interval {
         double min;
         double max;
@@ -119,6 +159,7 @@ namespace rocksdb {
                 }
             }
         }
+
         // SpatialSketch(double x_min, double x_max, double y_min, double y_max) {
         //     x_min_ = x_min;
         //     x_max_ = x_max;
@@ -130,6 +171,56 @@ namespace rocksdb {
         //         }
         //     }
         // }
+
+        std::vector<std::pair<uint32_t, uint32_t>> getZorderSequence() {
+            std::vector<std::pair<uint32_t, uint32_t>> zorder_seq;
+            for(int i =0; i < ROWS; i++) {
+                for(int j = 0; j < COLS; j++) {
+                    zorder_seq.push_back(std::make_pair((uint32_t)i,(uint32_t)j));
+                }
+            }
+            std::sort(zorder_seq.begin(), zorder_seq.end(),zorder_comparator_sketch());
+            return zorder_seq;
+        }
+
+        uint32_t getSumValues() {
+            uint32_t total_sum =0;
+            for(int i =0; i < ROWS; i++) {
+                for(int j = 0; j < COLS; j++) {
+                    total_sum += density_map_[i][j];
+                }
+            }
+            return total_sum;
+        }
+
+        void addSketch(SpatialSketch* sketch) {
+            
+            for(int i =0; i < ROWS; i++) {
+                for(int j = 0; j < COLS; j++) {
+                    density_map_[i][j] += sketch->density_map_[i][j];
+                }
+            }
+        }
+
+        std::pair<int, int> getAreaandPerimeter() {
+            int min_r = ROWS;
+            int min_c = COLS;
+            int max_r = 0;
+            int max_c = 0;
+            for(int r =0; r < ROWS; r++) {
+                for(int c = 0; c < COLS; c++) {
+                    if(density_map_[r][c] != 0){
+                        min_r = std::min(min_r, r);
+                        max_r = std::max(max_r, r);
+                        min_c = std::min(min_c, c);
+                        max_c = std::max(max_c, c);
+                    }
+                }
+            }
+            int area = (max_r - min_r) * (max_c - min_c);
+            int perimeter = 2 * (max_r - min_r + max_c - min_c);
+            return std::make_pair(area, perimeter);
+        }
 
         void addMbr(Mbr mbr) {
             double x_center = (mbr.first.min + mbr.first.max) / 2;
@@ -156,10 +247,37 @@ namespace rocksdb {
             return ss.str();
         }
 
-    private:
         static const int ROWS = 16;
         static const int COLS = 16;
         uint32_t density_map_[ROWS][COLS];
+
+    private:
+        // static const int ROWS = 16;
+        // static const int COLS = 16;
+        // uint32_t density_map_[ROWS][COLS];
+
+        struct zorder_comparator_sketch {
+            inline bool operator() (const std::pair<uint32_t,uint32_t>& p1, 
+                                    const std::pair<uint32_t,uint32_t>& p2)
+            {
+                if(((p1.second ^ p2.second) < (p1.first ^ p2.first)) &&
+                    ((p1.second ^ p2.second) < 
+                        ((p1.second ^ p2.second) ^ (p1.first ^ p2.first)))) {
+                            if(p1.first < p2.first) {
+                                return true;
+                            } else {
+                                return false;
+                            }
+                        }
+                if(p1.second < p2.second){
+                    return true;
+                } else {
+                    return false;
+                }
+                return false;
+            }                       
+        };
+
         double x_min_;
         double x_max_;
         double y_min_;

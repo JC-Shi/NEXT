@@ -259,6 +259,15 @@ class VersionStorageInfo {
     InternalKey** next_smallest = nullptr) 
     const;
 
+  void GetOverlappingInputsWithScoreFunction(
+    int level, const InternalKey* begin, const InternalKey* end, 
+    SpatialSketch input_sketch_sum, std::vector<FileMetaData*>* inputs, 
+    ImmutableOptions ioptions, int k_num_files, int tnum_files, int area, int perimeter,
+    int hint_index = -1, int* file_index = nullptr, 
+    bool expand_range = true, 
+    InternalKey** next_smallest = nullptr) 
+    const;
+
   void GetkMaxOverlappingInputs(
     int level, const std::vector<Mbr>* mbr_vect,
     std::vector<FileMetaData*>* inputs, ImmutableOptions ioptions, int k_num_files) const;
@@ -285,6 +294,10 @@ class VersionStorageInfo {
   void GetOverlappingInputsMbr(CompactionInputFiles& new_inputs, 
     const std::vector<Mbr>* mbr_vect, std::vector<FileMetaData*>* inputs, 
     ImmutableOptions ioptions, int k_num_files) const;
+
+  void GetOverlappingInputsScores(CompactionInputFiles& new_inputs, 
+    SpatialSketch input_sketch_sum, std::vector<FileMetaData*>* inputs, 
+    ImmutableOptions ioptions, int k_num_files, int tnum_files, int area, int perimeter) const;
 
   void GetOverlappingInputsBasedMbrArea(int level, 
     const std::vector<Mbr>* mbr_vect, std::vector<FileMetaData*>* inputs, 

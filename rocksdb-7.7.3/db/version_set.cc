@@ -4136,6 +4136,98 @@ void VersionStorageInfo::GetOverlappingInputsWithMbr(
   }
 }
 
+// based on the key-range overlapping files
+// pick top k files with highest score (score function)
+void VersionStorageInfo::GetOverlappingInputsWithScoreFunction(
+    int level, const InternalKey* begin, const InternalKey* end, 
+    SpatialSketch input_sketch_sum, std::vector<FileMetaData*>* inputs, 
+    ImmutableOptions ioptions, int k_num_files,int tnum_files, int area, int perimeter,
+    int hint_index, int* file_index, bool expand_range, 
+    InternalKey** next_smallest) const {
+
+  if (level >= num_non_empty_levels_) {
+    // this level is empty, no overlapping inputs
+    return;
+  }
+
+  inputs->clear();
+  if (file_index) {
+    *file_index = -1;
+  }
+  const Comparator* user_cmp = user_comparator_;
+  if (level > 0) {
+    CompactionInputFiles tmp_output_inputs;
+    GetOverlappingInputsRangeBinarySearch(level, begin, end, &tmp_output_inputs.files, hint_index,
+                                          file_index, false, next_smallest);
+
+    GetOverlappingInputsScores(tmp_output_inputs, input_sketch_sum, inputs, ioptions, 
+                                k_num_files, tnum_files, area, perimeter);                                   
+    return;
+  }
+
+  if (next_smallest) {
+    // next_smallest key only makes sense for non-level 0, where files are
+    // non-overlapping
+    *next_smallest = nullptr;
+  }
+
+  Slice user_begin, user_end;
+  if (begin != nullptr) {
+    user_begin = begin->user_key();
+  }
+  if (end != nullptr) {
+    user_end = end->user_key();
+  }
+
+  // index stores the file index need to check.
+  std::list<size_t> index;
+  for (size_t i = 0; i < level_files_brief_[level].num_files; i++) {
+    index.emplace_back(i);
+  }
+
+  while (!index.empty()) {
+    bool found_overlapping_file = false;
+    auto iter = index.begin();
+    while (iter != index.end()) {
+      FdWithKeyRange* f = &(level_files_brief_[level].files[*iter]);
+      const Slice file_start = ExtractUserKey(f->smallest_key);
+      const Slice file_limit = ExtractUserKey(f->largest_key);
+      if (begin != nullptr &&
+          user_cmp->CompareWithoutTimestamp(file_limit, user_begin) < 0) {
+        // "f" is completely before specified range; skip it
+        iter++;
+      } else if (end != nullptr &&
+                 user_cmp->CompareWithoutTimestamp(file_start, user_end) > 0) {
+        // "f" is completely after specified range; skip it
+        iter++;
+      } else {
+        // if overlap
+        inputs->emplace_back(files_[level][*iter]);
+        found_overlapping_file = true;
+        // record the first file index.
+        if (file_index && *file_index == -1) {
+          *file_index = static_cast<int>(*iter);
+        }
+        // the related file is overlap, erase to avoid checking again.
+        iter = index.erase(iter);
+        if (expand_range) {
+          if (begin != nullptr &&
+              user_cmp->CompareWithoutTimestamp(file_start, user_begin) < 0) {
+            user_begin = file_start;
+          }
+          if (end != nullptr &&
+              user_cmp->CompareWithoutTimestamp(file_limit, user_end) > 0) {
+            user_end = file_limit;
+          }
+        }
+      }
+    }
+    // if all the files left are not overlap, break
+    if (!found_overlapping_file) {
+      break;
+    }
+  }
+}
 
 // Store in "*inputs" all files in "level" that overlap [begin,end]
 // If hint_index is specified, then it points to a file in the
@@ -4307,6 +4399,8 @@ std::vector<FileMetaData*>* inputs, ImmutableOptions ioptions, int k_num_files) 
 
 }
 
+// Based on the key-range overlapping files
+// Pike top k file with largest overlapping mbr area
 void VersionStorageInfo::GetOverlappingInputsMbr(CompactionInputFiles& new_inputs, const std::vector<Mbr>* mbr_vect,
 std::vector<FileMetaData*>* inputs, ImmutableOptions ioptions, int k_num_files) const {
 
@@ -4369,6 +4463,107 @@ std::vector<FileMetaData*>* inputs, ImmutableOptions ioptions, int k_num_files) 
       break;
     }
     int idx = V_overlaparea_index[k].second;
+    FileMetaData* f1 = new_inputs[idx];
+    inputs->push_back(f1);
+  }
+
+}
+
+void VersionStorageInfo::GetOverlappingInputsScores(CompactionInputFiles& new_inputs, 
+    SpatialSketch input_sketch_sum, std::vector<FileMetaData*>* inputs, 
+    ImmutableOptions ioptions, int k_num_files, int tnum_files, int area, int perimeter) const {
+
+  ROCKS_LOG_DEBUG(ioptions.logger, "New Inputs size: %d", static_cast<int>(new_inputs.size()));
+  if (new_inputs.empty()) {
+    // if no key-range overlap, then return directly
+    return;
+  }
+  const int num_files = static_cast<int>(new_inputs.size());
+  int start_index = 0;
+  int end_index = num_files;
+  std::vector<std::pair<double, int>> V_score_index;
+
+  // if the number of output_level_files is lesser than k value
+  // just return all files
+  if (num_files <= k_num_files) {
+    for (int i=0; i<num_files; i++) {
+      FileMetaData* f1 = new_inputs[i];
+      inputs->push_back(f1);      
+    }
+    return;
+  }
+
+  for(int i=start_index; i < end_index; i++) {
+    FileMetaData* f = new_inputs[i];
+    SpatialSketch new_sketch;
+    // adding the input_level_file sketch with the output_level_file sketch
+    new_sketch.addSketch(&input_sketch_sum);
+    new_sketch.addSketch(&(f->sketch));
+
+    // find the total sum of all values in the sketch
+    uint32_t total_sum = new_sketch.getSumValues();
+    int values_interval = int(std::ceil(total_sum / (tnum_files+1)));
+
+    // adding each cell to a vector based on z-order
+    std::vector<std::tuple<int, int, int>> t_sketch_cell;
+    std::vector<std::pair<uint32_t, uint32_t>> z_order_sq = new_sketch.getZorderSequence();
+    for(int z_o = 0; z_o < int(z_order_sq.size()); z_o++){
+        int m_row = int(z_order_sq[z_o].first);
+        int m_col = int(z_order_sq[z_o].second);
+        if(new_sketch.density_map_[m_row][m_col] != 0){
+          t_sketch_cell.push_back(std::make_tuple(m_row, m_col, new_sketch.density_map_[m_row][m_col]));
+        }
+    }
+
+    // estimating the new area and perimeter after compaction
+    int addedValues = 0;
+    int stop_v = 0;
+    int cell_n = 0;
+    int new_area = 0;
+    int new_perimeter = 0;
+    while (addedValues < int(total_sum)) {
+      stop_v += values_interval;
+      int min_row_n = new_sketch.ROWS;
+      int min_col_n = new_sketch.COLS;
+      int max_row_n = 0;
+      int max_col_n = 0;
+      while (addedValues < std::min(stop_v, int(total_sum))) {
+        min_row_n = std::min(min_row_n, std::get<0>(t_sketch_cell[cell_n]));
+        min_col_n = std::min(min_col_n, std::get<1>(t_sketch_cell[cell_n]));
+        max_row_n = std::max(max_row_n, std::get<0>(t_sketch_cell[cell_n]));
+        max_col_n = std::max(max_col_n, std::get<1>(t_sketch_cell[cell_n]));
+        addedValues += std::get<2>(t_sketch_cell[cell_n]);
+        cell_n += 1;
+      }
+      new_area += ((max_row_n - min_row_n) * (max_col_n - min_col_n));
+      new_perimeter += ((max_col_n + max_row_n - min_col_n - min_row_n)*2);
+    }
+
+    // output_level_file score
+    // current design: simply adding the change in area and perimeter then divided by 2
+    double ofscore = 0.5 * ((area - new_area) + (perimeter - new_perimeter)); 
+
+    // pushing the score with the output_level_file index to the outside vector
+    V_score_index.push_back(std::make_pair(ofscore, i));
+  }
+ 
+  // sort the output_level_file based on the score
+  std::sort(V_score_index.rbegin(), V_score_index.rend());
+  for (int a=0; a<end_index; a++){
+     ROCKS_LOG_DEBUG(ioptions.logger, "Sorted Output Level Vectors (score, index): %f, %d \n", V_score_index[a].first, V_score_index[a].second);
+  } 
+
+  // If k_num_files == -1, this means picking all files in that level
+  int k_n_f;
+  if (k_num_files == -1) {
+    k_n_f = num_files;
+  } else {
+    k_n_f = std::min(num_files, k_num_files);
+  }
+
+
+  for(int k=0; k < k_n_f; k++){
+    int idx = V_score_index[k].second;
     FileMetaData* f1 = new_inputs[idx];
     inputs->push_back(f1);
   }
@@ -6734,7 +6929,7 @@ InternalIterator* VersionSet::MakeInputIterator(
   size_t total_n_files = 0;
   switch (c->immutable_options()->compaction_output_selection) {
 
-    case kByMbrOverlappingArea: 
+    case kByMbrOverlappingArea: case kByScoreFunction:
       for (size_t compact_l = 0; compact_l < c->num_input_levels(); compact_l++) {
         total_n_files += c->input_levels(compact_l)->num_files;
       }   
@@ -6798,7 +6993,7 @@ InternalIterator* VersionSet::MakeInputIterator(
 
         switch (c->immutable_options()->compaction_output_selection) {
           
-          case kByMbrOverlappingArea:{
+          case kByMbrOverlappingArea: case kByScoreFunction: {
 
             ROCKS_LOG_DEBUG(db_options_->info_log, 
             "Compaction Output selection Policy %d used in InputerIteractor \n",

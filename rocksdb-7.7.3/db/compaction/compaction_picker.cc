@@ -185,6 +185,24 @@ void CompactionPicker::GetMbrList(const CompactionInputFiles& inputs,
   }
 }
 
+// Get the input level files' sketch (sum)
+// Together output the original inputs mbr's area and perimeter (based on sketch)
+void CompactionPicker::GetInputsSketchs(const CompactionInputFiles& inputs, 
+                                        SpatialSketch* sketch_sum, int &i_num,
+                                        int &area, int &perimeter) const {
+  assert(!inputs.empty());
+
+  i_num = inputs.size();
+  for (size_t i =0; i < inputs.size(); i++) {
+    FileMetaData* f = inputs[i];
+    sketch_sum->addSketch(&(f->sketch));
+    std::pair<int, int> a_and_p = f->sketch.getAreaandPerimeter();
+    area += a_and_p.first;
+    perimeter += a_and_p.second;
+  }
+
+}
+
 void CompactionPicker::GetRange(const CompactionInputFiles& inputs,
                                 InternalKey* smallest,
                                 InternalKey* largest) const {
@@ -554,7 +572,7 @@ bool CompactionPicker::SetupOtherInputs(
                                       parent_index);
       break;
 
-    case kByMbrOverlappingArea:
+    case kByMbrOverlappingArea:{
       // InternalKey smallest, largest;
       // GetRange(*inputs, &smallest, &largest);
       std::vector<Mbr> Mbr_vect;
@@ -563,6 +581,20 @@ bool CompactionPicker::SetupOtherInputs(
       vstorage->GetOverlappingInputsWithMbr(output_level, &smallest, &largest,
                                       &Mbr_vect, &output_level_inputs->files, 
                                       ioptions, ioptions.max_compaction_output_files_selected, *parent_index, parent_index);
+      break;}
+
+    case kByScoreFunction:
+      SpatialSketch input_sketch_sum;
+      int input_lvl_area;
+      int input_lvl_perimeter;
+      int input_num_files;
+      GetInputsSketchs(*inputs, &input_sketch_sum, input_num_files, 
+                      input_lvl_area, input_lvl_perimeter);
+      vstorage->GetOverlappingInputsWithScoreFunction(output_level, &smallest, &largest,
+                        input_sketch_sum, &output_level_inputs->files,
+                        ioptions, ioptions.max_compaction_output_files_selected,
+                        input_num_files, input_lvl_area, input_lvl_perimeter,
+                        *parent_index, parent_index);
       break;
   }
 
@@ -619,7 +651,7 @@ bool CompactionPicker::SetupOtherInputs(
       }
       break;
 
-    case kByMbrOverlappingArea:
+    case kByMbrOverlappingArea: case kByScoreFunction:
       if (!output_level_inputs->empty()) {
         if (!CheckingExpandInputsToCleanCutMbr(cf_name, output_level_inputs)) {
           return false;
@@ -966,7 +998,7 @@ Compaction* CompactionPicker::CompactRange(
     }    
     break;
   
-  case kByMbrOverlappingArea:
+  case kByMbrOverlappingArea: case kByScoreFunction:
     if (CheckingExpandInputsToCleanCutMbr(cf_name, &inputs) ==
         false) {
       // manual compaction is now multi-threaded, so it can
@@ -1370,7 +1402,7 @@ void CompactionPicker::PickFilesMarkedForCompaction(
     // TODO: options.compaction_policy
     switch (ioptions_.compaction_output_selection)
     {    
-    case kByMbrOverlappingArea:
+    case kByMbrOverlappingArea: case kByScoreFunction:
       return CheckingExpandInputsToCleanCutMbr(cf_name, start_level_inputs);
       break;
 

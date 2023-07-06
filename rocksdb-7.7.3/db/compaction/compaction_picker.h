@@ -141,6 +141,10 @@ class CompactionPicker {
   void GetMbrList(const CompactionInputFiles& inputs,
                                   std::vector<Mbr>* Mbr_vect) const;
 
+  void GetInputsSketchs(const CompactionInputFiles& inputs, 
+                        SpatialSketch* sketch_sum, int &i_num,
+                        int &area, int &perimeter) const;
+
 
   // Stores the minimal range that covers all entries in inputs in
   // *smallest, *largest.
