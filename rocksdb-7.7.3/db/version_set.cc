@@ -4515,6 +4515,9 @@ void VersionStorageInfo::GetOverlappingInputsScores(CompactionInputFiles& new_in
         }
     }
 
+    ROCKS_LOG_DEBUG(ioptions.logger, "File Sketch: %s\n", new_sketch.toString().c_str());
+    ROCKS_LOG_DEBUG(ioptions.logger, "total_sum: %d\n", (int)total_sum);
+
     // estimating the new area and perimeter after compaction
     int addedValues = 0;
     int stop_v = 0;
@@ -4537,6 +4540,9 @@ void VersionStorageInfo::GetOverlappingInputsScores(CompactionInputFiles& new_in
       }
       new_area += ((max_row_n - min_row_n) * (max_col_n - min_col_n));
       new_perimeter += ((max_col_n + max_row_n - min_col_n - min_row_n)*2);
+      ROCKS_LOG_DEBUG(ioptions.logger, "new_area: %d, new_perimeter: %d\n", new_area, new_perimeter);
+      ROCKS_LOG_DEBUG(ioptions.logger, "coordinates: %d, %d, %d, %d\n", min_row_n, min_col_n, max_row_n, max_col_n);
+      ROCKS_LOG_DEBUG(ioptions.logger, "Added value: %d; Stop value: %d\n", addedValues, stop_v);
     }
 
     // output_level_file score
