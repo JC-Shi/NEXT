@@ -1054,5 +1054,6 @@ const std::string kHashIndexPrefixesMetadataBlock =
 const std::string kPropTrue = "1";
 const std::string kPropFalse = "0";
 const std::string kRtreeIndexMetadataBlock = "rocksdb.rtreeindex.metadata";
+const std::string kRtreeSecondaryIndexMetadataBlock = "rocksdb.rtreesecindex.metadata";
 
 }  // namespace ROCKSDB_NAMESPACE

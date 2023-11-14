@@ -99,4 +99,6 @@ extern const std::string kHashIndexPrefixesMetadataBlock;
 extern const std::string kPropTrue;
 extern const std::string kPropFalse;
 extern const std::string kRtreeIndexMetadataBlock;
+extern const std::string kRtreeSecondaryIndexMetadataBlock;
+
 }  // namespace ROCKSDB_NAMESPACE

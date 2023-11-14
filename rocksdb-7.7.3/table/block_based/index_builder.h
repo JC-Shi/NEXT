@@ -111,6 +111,83 @@ class IndexBuilder {
   size_t index_size_ = 0;
 };
 
+class SecondaryIndexBuilder {
+ public:
+  static SecondaryIndexBuilder* CreateSecIndexBuilder(
+      BlockBasedTableOptions::SecondaryIndexType sec_index_type,
+      const ROCKSDB_NAMESPACE::InternalKeyComparator* comparator,
+      const InternalKeySliceTransform* int_key_slice_transform,
+      const bool use_value_delta_encoding,
+      const BlockBasedTableOptions& table_opt);
+
+  // Index builder will construct a set of blocks which contain:
+  //  1. One primary index block.
+  //  2. (Optional) a set of metablocks that contains the metadata of the
+  //     primary index.
+  struct IndexBlocks {
+    Slice index_block_contents;
+    std::unordered_map<std::string, Slice> meta_blocks;
+  };
+  explicit SecondaryIndexBuilder(const InternalKeyComparator* comparator)
+      : comparator_(comparator) {}
+
+  virtual ~SecondaryIndexBuilder() {}
+
+  // Add a new index entry to index block.
+  // To allow further optimization, we provide `last_key_in_current_block` and
+  // `first_key_in_next_block`, based on which the specific implementation can
+  // determine the best index key to be used for the index block.
+  // Called before the OnKeyAdded() call for first_key_in_next_block.
+  // @last_key_in_current_block: this parameter maybe overridden with the value
+  //                             "substitute key".
+  // @first_key_in_next_block: it will be nullptr if the entry being added is
+  //                           the last one in the table
+  //
+  // REQUIRES: Finish() has not yet been called.
+  virtual void AddIndexEntry(std::string* last_key_in_current_block,
+                             const Slice* first_key_in_next_block,
+                             const BlockHandle& block_handle) = 0;
+
+  // This method will be called whenever a key is added. The subclasses may
+  // override OnKeyAdded() if they need to collect additional information.
+  virtual void OnKeyAdded(const Slice& /*key*/) {}
+
+  // Inform the index builder that all entries has been written. Block builder
+  // may therefore perform any operation required for block finalization.
+  //
+  // REQUIRES: Finish() has not yet been called.
+  inline Status Finish(IndexBlocks* index_blocks) {
+    // Throw away the changes to last_partition_block_handle. It has no effect
+    // on the first call to Finish anyway.
+    BlockHandle last_partition_block_handle;
+    return Finish(index_blocks, last_partition_block_handle);
+  }
+
+  // This override of Finish can be utilized to build the 2nd level index in
+  // PartitionIndexBuilder.
+  //
+  // index_blocks will be filled with the resulting index data. If the return
+  // value is Status::InComplete() then it means that the index is partitioned
+  // and the callee should keep calling Finish until Status::OK() is returned.
+  // In that case, last_partition_block_handle is pointer to the block written
+  // with the result of the last call to Finish. This can be utilized to build
+  // the second level index pointing to each block of partitioned indexes. The
+  // last call to Finish() that returns Status::OK() populates index_blocks with
+  // the 2nd level index content.
+  virtual Status Finish(IndexBlocks* index_blocks,
+                        const BlockHandle& last_partition_block_handle) = 0;
+
+  // Get the size for index block. Must be called after ::Finish.
+  virtual size_t IndexSize() const = 0;
+
+  virtual bool seperator_is_key_plus_seq() { return true; }
+
+ protected:
+  const InternalKeyComparator* comparator_;
+  // Set after ::Finish is called
+  size_t index_size_ = 0;
+};
+
 // This index builder builds space-efficient index block.
 //
 // Optimizations:
@@ -701,4 +778,237 @@ class RtreeIndexBuilder : public IndexBuilder {
     }
   }
 };
+
+class RtreeSecondaryIndexLevelBuilder : public SecondaryIndexBuilder {
+ public:
+  explicit RtreeSecondaryIndexLevelBuilder(
+      const InternalKeyComparator* comparator,
+      const int index_block_restart_interval, const uint32_t format_version,
+      const bool use_value_delta_encoding,
+      BlockBasedTableOptions::IndexShorteningMode shortening_mode,
+      bool include_first_key)
+      : SecondaryIndexBuilder(comparator),
+        index_block_builder_(index_block_restart_interval,
+                             true /*use_delta_encoding*/,
+                             use_value_delta_encoding),
+        use_value_delta_encoding_(use_value_delta_encoding),
+        include_first_key_(include_first_key),
+        shortening_mode_(shortening_mode) {
+    (void)format_version;
+    // std::cout << "created RtreeSecondaryIndexLevelBuilder" << std::endl;
+  }
+
+  virtual void OnKeyAdded(const Slice& value) override {
+    Slice val_temp = Slice(value);
+    Mbr mbr = ReadValueMbr(val_temp);
+    expandMbrExcludeIID(enclosing_mbr_, mbr);
+  }
+
+  virtual void AddIndexEntry(std::string* last_key_in_current_block,
+                             const Slice* first_key_in_next_block,
+                             const BlockHandle& block_handle) override {
+    // Encode the block handle and construct leaf node
+    // std::string handle_encoding;
+    // block_handle.EncodeTo(&handle_encoding);
+    // LeafNode leaf_node = LeafNode{enclosing_mbb_, handle_encoding};
+    // leaf_nodes_.push_back(leaf_node);
+    (void)last_key_in_current_block;
+    (void)first_key_in_next_block;
+
+    IndexValue entry(block_handle, current_block_first_internal_key_);
+    std::string encoded_entry;
+    std::string delta_encoded_entry;
+    entry.EncodeTo(&encoded_entry, include_first_key_, nullptr);
+    if (use_value_delta_encoding_ && !last_encoded_handle_.IsNull()) {
+      entry.EncodeTo(&delta_encoded_entry, include_first_key_,
+                     &last_encoded_handle_);
+    } else {
+      // If it's the first block, or delta encoding is disabled,
+      // BlockBuilder::Add() below won't use delta-encoded slice.
+    }
+    last_encoded_handle_ = block_handle;
+    const Slice delta_encoded_entry_slice(delta_encoded_entry);
+    index_block_builder_.Add(Slice(serializeMbrExcludeIID(enclosing_mbr_)), encoded_entry, &delta_encoded_entry_slice);
+
+    enclosing_mbr_.clear();
+  }
+
+  virtual void AddIndexEntry(const BlockHandle& block_handle,
+                             std::string enclosing_mbr_string) {
+    // Encode the block handle and construct leaf node
+    // std::string handle_encoding;
+    // block_handle.EncodeTo(&handle_encoding);
+    // LeafNode leaf_node = LeafNode{enclosing_mbb_, handle_encoding};
+    // leaf_nodes_.push_back(leaf_node);
+
+    IndexValue entry(block_handle, current_block_first_internal_key_);
+    std::string encoded_entry;
+    std::string delta_encoded_entry;
+    entry.EncodeTo(&encoded_entry, include_first_key_, nullptr);
+    if (use_value_delta_encoding_ && !last_encoded_handle_.IsNull()) {
+      entry.EncodeTo(&delta_encoded_entry, include_first_key_,
+                     &last_encoded_handle_);
+    } else {
+      // If it's the first block, or delta encoding is disabled,
+      // BlockBuilder::Add() below won't use delta-encoded slice.
+    }
+    last_encoded_handle_ = block_handle;
+    const Slice delta_encoded_entry_slice(delta_encoded_entry);
+    index_block_builder_.Add(Slice(enclosing_mbr_string), encoded_entry, &delta_encoded_entry_slice);
+
+    enclosing_mbr_.clear();
+  }
+
+  using SecondaryIndexBuilder::Finish;
+  virtual Status Finish(
+      IndexBlocks* index_blocks,
+      const BlockHandle& /*last_partition_block_handle*/) override {
+    
+    index_blocks->index_block_contents = index_block_builder_.Finish();
+    index_size_ = index_blocks->index_block_contents.size();
+    return Status::OK();
+  }
+
+  virtual size_t IndexSize() const override { return index_size_; }
+
+  virtual bool seperator_is_key_plus_seq() override {
+    return seperator_is_key_plus_seq_;
+  }
+
+  friend class RtreeSecondaryIndexBuilder;
+
+ private:
+  BlockBuilder index_block_builder_;
+  const bool use_value_delta_encoding_;
+  bool seperator_is_key_plus_seq_;
+  const bool include_first_key_;
+  BlockBasedTableOptions::IndexShorteningMode shortening_mode_;
+  BlockHandle last_encoded_handle_ = BlockHandle::NullBlockHandle();
+  std::string current_block_first_internal_key_;
+  Mbr enclosing_mbr_;
+  void expandMbrExcludeIID(Mbr& to_expand, Mbr expander) {
+    if (to_expand.empty()) {
+      to_expand = expander;
+    } else {
+      if (expander.first.min < to_expand.first.min) {
+        to_expand.first.min = expander.first.min;
+      }
+      if (expander.first.max > to_expand.first.max) {
+        to_expand.first.max = expander.first.max;
+      }
+      if (expander.second.min < to_expand.second.min) {
+        to_expand.second.min = expander.second.min;
+      }
+      if (expander.second.max > to_expand.second.max) {
+        to_expand.second.max = expander.second.max;
+      }
+    }
+  }
+};
+
+class RtreeSecondaryIndexBuilder : public SecondaryIndexBuilder {
+ public:
+  static RtreeSecondaryIndexBuilder* CreateIndexBuilder(
+      const ROCKSDB_NAMESPACE::InternalKeyComparator* comparator,
+      const bool use_value_delta_encoding,
+      const BlockBasedTableOptions& table_opt);
+
+  explicit RtreeSecondaryIndexBuilder(const InternalKeyComparator* comparator,
+                                   const BlockBasedTableOptions& table_opt,
+                                   const bool use_value_delta_encoding);
+
+  virtual ~RtreeSecondaryIndexBuilder();
+
+  virtual void OnKeyAdded(const Slice& value) override;
+
+  virtual void AddIndexEntry(std::string* last_key_in_current_block,
+                             const Slice* first_key_in_next_block,
+                             const BlockHandle& block_handle) override;
+
+  virtual Status Finish(
+      IndexBlocks* index_blocks,
+      const BlockHandle& last_partition_block_handle) override;
+
+  virtual size_t IndexSize() const override { return index_size_; }
+  size_t TopLevelIndexSize(uint64_t) const { return top_level_index_size_; }
+  size_t NumPartitions() const;
+
+  inline bool ShouldCutFilterBlock() {
+    // Current policy is to align the partitions of index and filters
+    if (cut_filter_block) {
+      cut_filter_block = false;
+      return true;
+    }
+    return false;
+  }
+
+  std::string& GetPartitionKey() { return sub_index_last_key_; }
+
+  // Called when an external entity (such as filter partition builder) request
+  // cutting the next partition
+  void RequestPartitionCut();
+
+  bool get_use_value_delta_encoding() { return use_value_delta_encoding_; }
+
+ private:
+  // Set after ::Finish is called
+  size_t top_level_index_size_ = 0;
+  // Set after ::Finish is called
+  size_t partition_cnt_ = 0;
+
+  void MakeNewSubIndexBuilder();
+
+  struct Entry {
+    std::string key;
+    std::unique_ptr<RtreeSecondaryIndexLevelBuilder> value;
+    // Entry& operator=(Entry& other) {
+    //     if (this != &other) {
+    //         key = other.key;
+    //         value.reset(other.value.release());
+    //     }
+    //     return *this;
+    // }
+  };
+  std::list<Entry> entries_;  // list of partitioned indexes and their keys
+  std::list<Entry> next_level_entries_;  // list of partitioned indexes and their keys
+  BlockBuilder index_block_builder_;              // top-level index builder
+  // the active partition index builder
+  RtreeSecondaryIndexLevelBuilder* sub_index_builder_;
+  // the last key in the active partition index builder
+  std::string sub_index_last_key_;
+  std::unique_ptr<FlushBlockPolicy> flush_policy_;
+  // true if Finish is called once but not complete yet.
+  bool finishing_indexes = false;
+  const BlockBasedTableOptions& table_opt_;
+  bool use_value_delta_encoding_;
+  // true if an external entity (such as filter partition builder) request
+  // cutting the next partition
+  bool partition_cut_requested_ = true;
+  // true if it should cut the next filter partition block
+  bool cut_filter_block = false;
+  BlockHandle last_encoded_handle_;
+  Mbr sub_index_enclosing_mbr_;
+  Mbr enclosing_mbr_;
+  uint32_t rtree_level_;
+  std::string rtree_height_str_;
+  void expandMbrExcludeIID(Mbr& to_expand, Mbr expander) {
+    if (to_expand.empty()) {
+      to_expand = expander;
+    } else {
+      if (expander.first.min < to_expand.first.min) {
+        to_expand.first.min = expander.first.min;
+      }
+      if (expander.first.max > to_expand.first.max) {
+        to_expand.first.max = expander.first.max;
+      }
+      if (expander.second.min < to_expand.second.min) {
+        to_expand.second.min = expander.second.min;
+      }
+      if (expander.second.max > to_expand.second.max) {
+        to_expand.second.max = expander.second.max;
+      }
+    }
+  }
+};
+
 }  // namespace ROCKSDB_NAMESPACE

@@ -306,10 +306,13 @@ namespace rocksdb {
     extern bool IntersectMbr(Mbr aa, Mbr bb);
     extern bool IntersectMbrExcludeIID(Mbr aa, Mbr bb);
     extern Mbr ReadKeyMbr(Slice data);
+    extern Mbr ReadValueMbr(Slice data);
 
     // Reads the mbr (intervals) from the key. It modifies the key slice.
     extern Mbr ReadQueryMbr(Slice data);
     extern std::string serializeMbr(const Mbr& mbr);
+    extern std::string serializeMbrExcludeIID(const Mbr& mbr);
     extern void expandMbr(Mbr& to_expand, Mbr expander);
+    extern void expandMbrExcludeIID(Mbr& to_expand, Mbr expander);
 
 }  // namespace rocksdb

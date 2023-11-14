@@ -142,6 +142,7 @@ class BlockBasedTableBuilder : public TableBuilder {
   void WriteFilterBlock(MetaIndexBuilder* meta_index_builder);
   void WriteIndexBlock(MetaIndexBuilder* meta_index_builder,
                        BlockHandle* index_block_handle);
+  void WriteSecIndexBlock(MetaIndexBuilder* meta_index_builder);
   void WritePropertiesBlock(MetaIndexBuilder* meta_index_builder);
   void WriteCompressionDictBlock(MetaIndexBuilder* meta_index_builder);
   void WriteRangeDelBlock(MetaIndexBuilder* meta_index_builder);

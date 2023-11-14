@@ -27,9 +27,13 @@ enum class BlockType : uint8_t {
   kHashIndexMetadata,
   kMetaIndex,
   kIndex,
+  kRtreeIndexMetadata,
+  // kRtreeSecondaryIndex,
+  // kRtreeSecondaryIndexMetadata,
   // Note: keep kInvalid the last value when adding new enum values.
   kInvalid,
-  kRtreeIndexMetadata
+
+  
 };
 
 }  // namespace ROCKSDB_NAMESPACE

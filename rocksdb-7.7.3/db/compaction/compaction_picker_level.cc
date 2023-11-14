@@ -490,10 +490,10 @@ Compaction* LevelCompactionBuilder::PickCompaction() {
   }
   assert(start_level_ >= 0 && output_level_ >= 0);
 
-  ROCKS_LOG_DEBUG(ioptions_.logger, "output_level_inputs after initialFiles(): \n");
-  for (auto file:output_level_inputs_.files) {
-      ROCKS_LOG_DEBUG(ioptions_.logger, "File MBR: %s\n", file->mbr.toString().c_str());
-  }
+  // ROCKS_LOG_DEBUG(ioptions_.logger, "output_level_inputs after initialFiles(): \n");
+  // for (auto file:output_level_inputs_.files) {
+  //     ROCKS_LOG_DEBUG(ioptions_.logger, "File MBR: %s\n", file->mbr.toString().c_str());
+  // }
 
   // If it is a L0 -> base level compaction, we need to set up other L0
   // files if needed.
@@ -750,10 +750,11 @@ bool LevelCompactionBuilder::PickFileToCompact() {
   const std::vector<FileMetaData*>& level_files =
       vstorage_->LevelFiles(start_level_);
 
-  ROCKS_LOG_DEBUG(ioptions_.logger, "List of start level files: \n");
-  for (auto file:level_files) {
-      ROCKS_LOG_DEBUG(ioptions_.logger, "File MBR: %s\n", file->mbr.toString().c_str());
-  }
+  // ROCKS_LOG_DEBUG(ioptions_.logger, "List of start level files: \n");
+  ROCKS_LOG_DEBUG(ioptions_.logger, "Pickded start level files");
+  // for (auto file:level_files) {
+  //     ROCKS_LOG_DEBUG(ioptions_.logger, "File MBR: %s\n", file->mbr.toString().c_str());
+  // }
 
   // Pick the file with the highest score in this level that is not already
   // being compacted.
@@ -779,7 +780,7 @@ bool LevelCompactionBuilder::PickFileToCompact() {
       }
       continue;
     }
-    ROCKS_LOG_DEBUG(ioptions_.logger, "Pick File to compact with MBR: %s", f->mbr.toString().c_str());
+    // ROCKS_LOG_DEBUG(ioptions_.logger, "Pick File to compact with MBR: %s", f->mbr.toString().c_str());
     start_level_inputs_.files.push_back(f);
 
     // TODO: options.compaction_policy
@@ -947,10 +948,10 @@ bool LevelCompactionBuilder::PickFileToCompact() {
 
     //==============================================================================
 
-    ROCKS_LOG_DEBUG(ioptions_.logger, "List of overlapping files at the next level: \n");
-    for (auto file:output_level_inputs.files) {
-        ROCKS_LOG_DEBUG(ioptions_.logger, "File MBR: %s\n", file->mbr.toString().c_str());
-    }
+    // ROCKS_LOG_DEBUG(ioptions_.logger, "List of overlapping files at the next level: \n");
+    // for (auto file:output_level_inputs.files) {
+    //     ROCKS_LOG_DEBUG(ioptions_.logger, "File MBR: %s\n", file->mbr.toString().c_str());
+    // }
     if (output_level_inputs.empty()) {
       if (TryExtendNonL0TrivialMove(index)) {
         break;

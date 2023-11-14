@@ -100,6 +100,13 @@ namespace rocksdb {
         return mbr;
     }
 
+    Mbr ReadValueMbr(Slice data) {
+        Mbr mbr;
+        // The value slice contains the coordinates only
+        ReadMbrValues(mbr, data);
+        return mbr;
+    }
+
     Mbr ReadQueryMbr(Slice data) {
         Mbr mbr;
         // In a key the first dimension is a single value only
@@ -110,6 +117,19 @@ namespace rocksdb {
         data.remove_prefix(2 * sizeof(uint64_t));
         ReadMbrValues(mbr, data);
         return mbr;
+    }
+
+    std::string serializeMbrExcludeIID(const Mbr& mbr) {
+        std::string serialized;
+        serialized.append(reinterpret_cast<const char*>(&mbr.first.min),
+                        sizeof(double));
+        serialized.append(reinterpret_cast<const char*>(&mbr.first.max),
+                        sizeof(double));
+        serialized.append(reinterpret_cast<const char*>(&mbr.second.min),
+                        sizeof(double));
+        serialized.append(reinterpret_cast<const char*>(&mbr.second.max),
+                        sizeof(double));
+        return serialized;
     }
 
     std::string serializeMbr(const Mbr& mbr) {
@@ -139,6 +159,25 @@ namespace rocksdb {
             if (expander.iid.max > to_expand.iid.max) {
                 to_expand.iid.max = expander.iid.max;
             }
+            if (expander.first.min < to_expand.first.min) {
+                to_expand.first.min = expander.first.min;
+            }
+            if (expander.first.max > to_expand.first.max) {
+                to_expand.first.max = expander.first.max;
+            }
+            if (expander.second.min < to_expand.second.min) {
+                to_expand.second.min = expander.second.min;
+            }
+            if (expander.second.max > to_expand.second.max) {
+                to_expand.second.max = expander.second.max;
+            }
+        }
+  }
+
+    void expandMbrExcludeIID(Mbr& to_expand, Mbr expander) {
+        if (to_expand.empty()) {
+            to_expand = expander;
+        } else {
             if (expander.first.min < to_expand.first.min) {
                 to_expand.first.min = expander.first.min;
             }

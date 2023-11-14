@@ -20,6 +20,7 @@
 #include <string>
 #include <unordered_map>
 #include <utility>
+#include <iostream>
 
 #include "cache/cache_entry_roles.h"
 #include "cache/cache_key.h"
@@ -59,6 +60,7 @@ namespace ROCKSDB_NAMESPACE {
 extern const std::string kHashIndexPrefixesBlock;
 extern const std::string kHashIndexPrefixesMetadataBlock;
 extern const std::string kRtreeIndexMetadataBlock;
+extern const std::string kRtreeSecondaryIndexMetadataBlock;
 
 
 // Without anonymous namespace here, we fail the warning -Wmissing-prototypes
@@ -269,6 +271,7 @@ struct BlockBasedTableBuilder::Rep {
 
   InternalKeySliceTransform internal_prefix_transform;
   std::unique_ptr<IndexBuilder> index_builder;
+  std::unique_ptr<SecondaryIndexBuilder> sec_index_builder;
   PartitionedIndexBuilder* p_index_builder_ = nullptr;
 
   std::string last_key;
@@ -482,6 +485,14 @@ struct BlockBasedTableBuilder::Rep {
           table_options.index_type, &internal_comparator,
           &this->internal_prefix_transform, use_delta_encoding_for_index_values,
           table_options));
+    }
+    if (table_options.create_secondary_index == true) {
+      sec_index_builder.reset(SecondaryIndexBuilder::CreateSecIndexBuilder(
+        table_options.sec_index_type, &internal_comparator,
+        &this->internal_prefix_transform, use_delta_encoding_for_index_values,
+        table_options));
+        // std::cout << "sec index builder success" << std::endl;
+        // sec_index_builder.reset(RtreeSecondaryIndexBuilder::CreateIndexBuilder());
     }
     if (ioptions.optimize_filters_for_hits && tbo.is_bottommost) {
       // Apply optimize_filters_for_hits setting here when applicable by
@@ -962,6 +973,9 @@ void BlockBasedTableBuilder::Add(const Slice& key, const Slice& value) {
         } else {
           r->index_builder->AddIndexEntry(&r->last_key, &key,
                                           r->pending_handle);
+          if (r->table_options.create_secondary_index) {
+            r->sec_index_builder->AddIndexEntry(&r->last_key, &key, r->pending_handle);
+          }
         }
       }
     }
@@ -988,6 +1002,9 @@ void BlockBasedTableBuilder::Add(const Slice& key, const Slice& value) {
     } else {
       if (!r->IsParallelCompressionEnabled()) {
         r->index_builder->OnKeyAdded(key);
+        if (r->table_options.create_secondary_index) {
+          r->sec_index_builder->OnKeyAdded(value);
+        }
       }
     }
     // TODO offset passed in is not accurate for parallel compression case
@@ -1644,7 +1661,7 @@ void BlockBasedTableBuilder::WriteIndexBlock(
       }
       // The last index_block_handle will be for the partition index block
     }
-    if (ok()) {
+    if (rep_->table_options.index_type == BlockBasedTableOptions::kRtreeSearch) {
       for (const auto& item : index_blocks.meta_blocks) {
         BlockHandle block_handle;
         WriteBlock(item.second, &block_handle, BlockType::kIndex);
@@ -1653,6 +1670,81 @@ void BlockBasedTableBuilder::WriteIndexBlock(
         }
         meta_index_builder->Add(item.first, block_handle);
       }
+    }
+  }
+}
+
+void BlockBasedTableBuilder::WriteSecIndexBlock(
+    MetaIndexBuilder* meta_index_builder) {
+  if (!ok()) {
+    return;
+  }
+  // std::cout << "enter writesecindexblock" << std::endl;
+  if (rep_->table_options.create_secondary_index == true) {
+    SecondaryIndexBuilder::IndexBlocks sec_index_blocks; 
+    BlockHandle sec_index_block_handle;
+    auto sec_index_builder_status = rep_->sec_index_builder->Finish(&sec_index_blocks);
+    if (sec_index_builder_status.IsIncomplete()) {
+      // We we have more than one index partition then meta_blocks are not
+      // supported for the index. Currently meta_blocks are used only by
+      // HashIndexBuilder which is not multi-partition.
+      assert(sec_index_blocks.meta_blocks.empty());
+    } else if (ok() && !sec_index_builder_status.ok()) {
+      rep_->SetStatus(sec_index_builder_status);
+    }
+    if (ok()) {
+      // std::cout << "ok before write block" << std::endl;
+      for (const auto& item : sec_index_blocks.meta_blocks) {
+        BlockHandle block_handle;
+        WriteBlock(item.second, &block_handle, BlockType::kIndex);
+        if (!ok()) {
+          break;
+        }
+        meta_index_builder->Add(item.first, block_handle);
+      }
+    }
+    if (ok()) {
+      // std::cout << "before write raw block" << std::endl;
+      // secondary index does not support parallel compression at this state
+      WriteRawBlock(sec_index_blocks.index_block_contents, kNoCompression,
+                      &sec_index_block_handle, BlockType::kIndex);
+    }
+    // If there are more index partitions, finish them and write them out
+    if (sec_index_builder_status.IsIncomplete()) {
+      bool sec_index_building_finished = false;
+      while (ok() && !sec_index_building_finished) {
+        Status s =
+            rep_->sec_index_builder->Finish(&sec_index_blocks, sec_index_block_handle);
+        if (s.ok()) {
+          sec_index_building_finished = true;
+        } else if (s.IsIncomplete()) {
+          // More partitioned index after this one
+          assert(!sec_index_building_finished);
+        } else {
+          // Error
+          rep_->SetStatus(s);
+          return;
+        }
+
+        // Secondary index does not support parallel compression 
+        WriteRawBlock(sec_index_blocks.index_block_contents, kNoCompression,
+                        &sec_index_block_handle, BlockType::kIndex);
+        
+        // The last index_block_handle will be for the partition index block
+      }
+      if (ok()) {
+        for (const auto& item : sec_index_blocks.meta_blocks) {
+          BlockHandle block_handle;
+          WriteBlock(item.second, &block_handle, BlockType::kIndex);
+          if (!ok()) {
+            break;
+          }
+          std::cout << "meta_index_builder add secindexblock" << std::endl;
+          meta_index_builder->Add(item.first, block_handle);
+        }
+      }
+      std::string sec_index_blk_name = "Secondary Index Block";
+      meta_index_builder->Add(sec_index_blk_name, sec_index_block_handle);
     }
   }
 }
@@ -1938,12 +2030,16 @@ void BlockBasedTableBuilder::EnterUnbuffered() {
     } else {
       for (; iter->Valid(); iter->Next()) {
         Slice key = iter->key();
+        Slice value = iter->value();
         if (r->filter_builder != nullptr) {
           size_t ts_sz =
               r->internal_comparator.user_comparator()->timestamp_size();
           r->filter_builder->Add(ExtractUserKeyAndStripTimestamp(key, ts_sz));
         }
         r->index_builder->OnKeyAdded(key);
+        if (r->table_options.create_secondary_index) {
+          r->sec_index_builder->OnKeyAdded(value);
+        }  
       }
       WriteBlock(Slice(data_block), &r->pending_handle, BlockType::kData);
       if (ok() && i + 1 < r->data_block_buffers.size()) {
@@ -1956,6 +2052,10 @@ void BlockBasedTableBuilder::EnterUnbuffered() {
         std::string last_key = iter->key().ToString();
         r->index_builder->AddIndexEntry(&last_key, first_key_in_next_block_ptr,
                                         r->pending_handle);
+        if (r->table_options.create_secondary_index) {
+          r->sec_index_builder->AddIndexEntry(&last_key, first_key_in_next_block_ptr,
+                                        r->pending_handle);
+        }
       }
     }
     std::swap(iter, next_block_iter);
@@ -1998,6 +2098,7 @@ Status BlockBasedTableBuilder::Finish() {
   // Write meta blocks, metaindex block and footer in the following order.
   //    1. [meta block: filter]
   //    2. [meta block: index]
+  //   2a. [meta block: secondary index]
   //    3. [meta block: compression dictionary]
   //    4. [meta block: range deletion tombstone]
   //    5. [meta block: properties]
@@ -2007,6 +2108,7 @@ Status BlockBasedTableBuilder::Finish() {
   MetaIndexBuilder meta_index_builder;
   WriteFilterBlock(&meta_index_builder);
   WriteIndexBlock(&meta_index_builder, &index_block_handle);
+  WriteSecIndexBlock(&meta_index_builder);
   WriteCompressionDictBlock(&meta_index_builder);
   WriteRangeDelBlock(&meta_index_builder);
   WritePropertiesBlock(&meta_index_builder);

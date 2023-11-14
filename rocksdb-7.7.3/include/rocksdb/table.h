@@ -235,6 +235,15 @@ struct BlockBasedTableOptions {
 
   IndexType index_type = kBinarySearch;
 
+  bool create_secondary_index = false;
+
+  enum SecondaryIndexType : char {
+    // Secondary index type
+    // R-tree secondary index for geographic coordinates (2D)
+    kRtreeSec = 0x00,
+  };
+  SecondaryIndexType sec_index_type = kRtreeSec;
+
   // The index type that will be used for the data block.
   enum DataBlockIndexType : char {
     kDataBlockBinarySearch = 0,   // traditional block type
