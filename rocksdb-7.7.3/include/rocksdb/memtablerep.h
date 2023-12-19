@@ -393,6 +393,25 @@ private:
     const size_t lookahead_;
 };
 
+// Adding SkipListFactorySecondary
+class SkipListSecFactory : public MemTableRepFactory {
+public:
+    explicit SkipListSecFactory(size_t lookahead = 0) : lookahead_(lookahead) {}
+
+    // Methods for MemTableRepFactory class overrides
+    using MemTableRepFactory::CreateMemTableRep;
+    virtual MemTableRep* CreateMemTableRep(const MemTableRep::KeyComparator&,
+                                           Allocator*, const SliceTransform*,
+                                           Logger* logger) override;
+
+    virtual const char* Name() const override {return "SkipListSecFactory";}
+
+    bool IsInsertConcurrentlySupported() const override { return true; }
+
+private:
+    const size_t lookahead_;
+};
+
 // Adding RtreeFactory
 class RTreeFactory : public MemTableRepFactory {
 public:

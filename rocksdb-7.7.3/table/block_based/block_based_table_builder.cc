@@ -491,7 +491,7 @@ struct BlockBasedTableBuilder::Rep {
         table_options.sec_index_type, &internal_comparator,
         &this->internal_prefix_transform, use_delta_encoding_for_index_values,
         table_options));
-        // std::cout << "sec index builder success" << std::endl;
+        std::cout << "sec index builder success" << std::endl;
         // sec_index_builder.reset(RtreeSecondaryIndexBuilder::CreateIndexBuilder());
     }
     if (ioptions.optimize_filters_for_hits && tbo.is_bottommost) {
@@ -1679,7 +1679,7 @@ void BlockBasedTableBuilder::WriteSecIndexBlock(
   if (!ok()) {
     return;
   }
-  // std::cout << "enter writesecindexblock" << std::endl;
+  std::cout << "enter writesecindexblock" << std::endl;
   if (rep_->table_options.create_secondary_index == true) {
     SecondaryIndexBuilder::IndexBlocks sec_index_blocks; 
     BlockHandle sec_index_block_handle;

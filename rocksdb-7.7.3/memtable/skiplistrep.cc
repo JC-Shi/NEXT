@@ -25,6 +25,7 @@ class SkipListRep : public MemTableRep {
 
   friend class LookaheadIterator;
   friend class SkipListMbrRep;
+  friend class SkipListSecRep;
 
 public:
  explicit SkipListRep(const MemTableRep::KeyComparator& compare,
@@ -433,6 +434,77 @@ class SkipListMbrRep : public SkipListRep {
     return new (mem) SkipListMbrRep::Iterator(&skip_list_, iterator_context);
   }
 };
+
+class SkipListSecRep : public SkipListRep {
+  public:
+    explicit SkipListSecRep(const MemTableRep::KeyComparator& compare,
+                                  Allocator* allocator,
+                                  const SliceTransform* transform,
+                                  const size_t lookahead) :
+            SkipListRep(compare, allocator, transform, lookahead) {}
+
+    class Iterator : public SkipListRep::Iterator {
+      public:
+        explicit Iterator(
+                const InlineSkipList<const MemTableRep::KeyComparator&>* list,
+                IteratorContext* iterator_context)
+                : SkipListRep::Iterator(list) {
+            if (iterator_context != nullptr){
+                // TODO_JC: different types of secondary attributes' query context
+                // TODO_JC: Options shall be added here              
+                RtreeIteratorContext* context =
+                    reinterpret_cast<RtreeIteratorContext*>(iterator_context);
+                Slice query_slice = Slice(context->query_mbr);
+                // Slice keypath_slice;
+                // GetLengthPrefixedSlice(&query_slice, &keypath_slice);
+                // query_keypath_ = keypath_slice.ToString();
+                query_mbr_ = ReadSecQueryMbr(query_slice);
+            }
+        }
+
+        virtual void Next() override {
+            // std::cout << "SkipListRep::Next()" << std::endl;
+            SkipListRep::Iterator::Next();
+            NextIfDisjoint();
+        }
+
+        virtual void SeekToFirst() override {
+            // std::cout << "SkipListRep::SeekToFirst()" << std::endl;
+            SkipListRep::Iterator::SeekToFirst();
+            NextIfDisjoint();
+        }
+
+      private:
+        // The querying minimum bounding region
+        // TODO_JC: differnt query context (mbr assuming secondary attribure is spatial)
+        Mbr query_mbr_;
+
+        // The NextIfDisjoint skip key if it does not intersect with the query mbr
+        void NextIfDisjoint() {
+          if (Valid()) {
+            // Getting value and check the value
+            // If value is not intersected or equal, skip
+            Slice internal_key_slice = GetLengthPrefixedSlice(key());
+            Slice val_slice = GetLengthPrefixedSlice(internal_key_slice.data() + internal_key_slice.size());
+            // TODO_JC: different types of secondary attributes need different condition checking
+            Mbr mbr = ReadValueMbr(val_slice);
+            if (!IntersectMbrExcludeIID(mbr, query_mbr_)) {
+              Next();
+            }
+          }  
+        }
+    };
+
+  virtual MemTableRep::Iterator* GetIterator(
+      IteratorContext* iterator_context,
+      Arena* arena = nullptr) override {
+    void *mem =
+        arena ? arena->AllocateAligned(sizeof(SkipListSecRep::Iterator))
+              : operator new(sizeof(SkipListSecRep::Iterator));
+    return new (mem) SkipListSecRep::Iterator(&skip_list_, iterator_context);
+  }
+};
+
 }
 
 static std::unordered_map<std::string, OptionTypeInfo> skiplist_factory_info = {
@@ -466,6 +538,12 @@ MemTableRep* SkipListMbrFactory::CreateMemTableRep(
         const MemTableRep::KeyComparator& compare, Allocator* allocator,
         const SliceTransform* transform, Logger* /*logger*/) {
     return new SkipListMbrRep(compare, allocator, transform, lookahead_);
+}
+
+MemTableRep* SkipListSecFactory::CreateMemTableRep(
+        const MemTableRep::KeyComparator& compare, Allocator* allocator,
+        const SliceTransform* transform, Logger* /*logger*/) {
+    return new SkipListSecRep(compare, allocator, transform, lookahead_);
 }
 
 }  // namespace ROCKSDB_NAMESPACE

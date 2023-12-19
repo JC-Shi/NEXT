@@ -310,6 +310,7 @@ namespace rocksdb {
 
     // Reads the mbr (intervals) from the key. It modifies the key slice.
     extern Mbr ReadQueryMbr(Slice data);
+    extern Mbr ReadSecQueryMbr(Slice data);
     extern std::string serializeMbr(const Mbr& mbr);
     extern std::string serializeMbrExcludeIID(const Mbr& mbr);
     extern void expandMbr(Mbr& to_expand, Mbr expander);

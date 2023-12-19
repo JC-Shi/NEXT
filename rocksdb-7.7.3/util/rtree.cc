@@ -119,6 +119,13 @@ namespace rocksdb {
         return mbr;
     }
 
+     Mbr ReadSecQueryMbr(Slice data) {
+        Mbr mbr;
+        // For query on secondary attributes, only MBR is included, no iid
+        ReadMbrValues(mbr, data);
+        return mbr;
+    }   
+
     std::string serializeMbrExcludeIID(const Mbr& mbr) {
         std::string serialized;
         serialized.append(reinterpret_cast<const char*>(&mbr.first.min),
