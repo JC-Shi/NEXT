@@ -24,19 +24,10 @@ namespace rocksdb {
             double width;
             double length;
 
-            if (aa.first.max >= bb.first.max) {
-                width = bb.first.max - aa.first.min;
-            } else {
-                width = aa.first.max - bb.first.min;
-            }
+            width = std::min(aa.first.max, bb.first.max) - std::max(aa.first.min, bb.first.min);
+            length = std::min(aa.second.max, bb.second.max) - std::max(aa.second.min, bb.second.min);
+            double overlapArea = width * length; 
 
-            if (aa.second.max >= bb.second.max) {
-                length = bb.second.max - aa.second.min;
-            } else {
-                length = aa.second.max - bb.second.min;
-            }
-
-            double overlapArea = width * length;
             return overlapArea;
         }
     }
