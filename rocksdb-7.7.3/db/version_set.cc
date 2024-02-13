@@ -4484,8 +4484,9 @@ void VersionStorageInfo::GetOverlappingInputsScores(CompactionInputFiles& new_in
   std::vector<std::pair<double, int>> V_score_index;
 
   // if the number of output_level_files is lesser than k value
+  // or k_num_files equal to -1
   // just return all files
-  if (num_files <= k_num_files) {
+  if (num_files <= k_num_files || k_num_files == -1) {
     for (int i=0; i<num_files; i++) {
       FileMetaData* f1 = new_inputs[i];
       inputs->push_back(f1);      
@@ -4493,6 +4494,7 @@ void VersionStorageInfo::GetOverlappingInputsScores(CompactionInputFiles& new_in
     return;
   }
 
+  SpatialSketch accum_sketch;
   for(int i=start_index; i < end_index; i++) {
     FileMetaData* f = new_inputs[i];
     SpatialSketch new_sketch;
@@ -4540,9 +4542,9 @@ void VersionStorageInfo::GetOverlappingInputsScores(CompactionInputFiles& new_in
       }
       new_area += ((max_row_n - min_row_n) * (max_col_n - min_col_n));
       new_perimeter += ((max_col_n + max_row_n - min_col_n - min_row_n)*2);
-      ROCKS_LOG_DEBUG(ioptions.logger, "new_area: %d, new_perimeter: %d\n", new_area, new_perimeter);
-      ROCKS_LOG_DEBUG(ioptions.logger, "coordinates: %d, %d, %d, %d\n", min_row_n, min_col_n, max_row_n, max_col_n);
-      ROCKS_LOG_DEBUG(ioptions.logger, "Added value: %d; Stop value: %d\n", addedValues, stop_v);
+      // ROCKS_LOG_DEBUG(ioptions.logger, "new_area: %d, new_perimeter: %d\n", new_area, new_perimeter);
+      // ROCKS_LOG_DEBUG(ioptions.logger, "coordinates: %d, %d, %d, %d\n", min_row_n, min_col_n, max_row_n, max_col_n);
+      // ROCKS_LOG_DEBUG(ioptions.logger, "Added value: %d; Stop value: %d\n", addedValues, stop_v);
     }
 
     // output_level_file score
@@ -4560,18 +4562,89 @@ void VersionStorageInfo::GetOverlappingInputsScores(CompactionInputFiles& new_in
   } 
 
   // If k_num_files == -1, this means picking all files in that level
-  int k_n_f;
-  if (k_num_files == -1) {
-    k_n_f = num_files;
-  } else {
-    k_n_f = std::min(num_files, k_num_files);
-  }
+  // int k_n_f;
+  // if (k_num_files == -1) {
+  //   k_n_f = num_files;
+  // } else {
+  //   k_n_f = std::min(num_files, k_num_files);
+  // }
 
+  int idx = V_score_index[0].second;
+  FileMetaData* f1 = new_inputs[idx];
+  inputs->push_back(f1); 
+  accum_sketch.addSketch(&(f1->sketch));
 
-  for(int k=0; k < k_n_f; k++){
-    int idx = V_score_index[k].second;
-    FileMetaData* f1 = new_inputs[idx];
-    inputs->push_back(f1);
+  // for(int k=0; k < k_num_files; k++){
+  //   int idx = V_score_index[k].second;
+  //   FileMetaData* f1 = new_inputs[idx];
+  //   inputs->push_back(f1);
+  // }
+
+  // repeat k_num_files-1 times
+  for(int k=1; k < k_num_files; k++){
+    
+    std::vector<std::pair<double, int>> V_score_index_temp;
+    for(int i=1; i < end_index; i++){
+      int f_idx = V_score_index[i].second;
+      FileMetaData* f = new_inputs[f_idx];
+      SpatialSketch new_sketch;
+      new_sketch.addSketch(&input_sketch_sum);
+      new_sketch.addSketch(&accum_sketch);
+      new_sketch.addSketch(&(f->sketch));
+
+      uint32_t total_sum = new_sketch.getSumValues();
+      int values_interval = int(std::ceil(total_sum / (tnum_files+1)));
+
+      std::vector<std::tuple<int, int, int>> t_sketch_cell;
+      std::vector<std::pair<uint32_t, uint32_t>> z_order_sq = new_sketch.getZorderSequence();
+      for(int z_o = 0; z_o < int(z_order_sq.size()); z_o++){
+          int m_row = int(z_order_sq[z_o].first);
+          int m_col = int(z_order_sq[z_o].second);
+          if(new_sketch.density_map_[m_row][m_col] != 0){
+            t_sketch_cell.push_back(std::make_tuple(m_row, m_col, new_sketch.density_map_[m_row][m_col]));
+          }
+      }
+
+      int addedValues = 0;
+      int stop_v = 0;
+      int cell_n = 0;
+      int new_area = 0;
+      int new_perimeter = 0;
+      while (addedValues < int(total_sum)) {
+        stop_v += values_interval;
+        int min_row_n = new_sketch.ROWS;
+        int min_col_n = new_sketch.COLS;
+        int max_row_n = 0;
+        int max_col_n = 0;
+        while (addedValues < std::min(stop_v, int(total_sum))) {
+          min_row_n = std::min(min_row_n, std::get<0>(t_sketch_cell[cell_n]));
+          min_col_n = std::min(min_col_n, std::get<1>(t_sketch_cell[cell_n]));
+          max_row_n = std::max(max_row_n, std::get<0>(t_sketch_cell[cell_n]));
+          max_col_n = std::max(max_col_n, std::get<1>(t_sketch_cell[cell_n]));
+          addedValues += std::get<2>(t_sketch_cell[cell_n]);
+          cell_n += 1;
+        }
+        new_area += ((max_row_n - min_row_n) * (max_col_n - min_col_n));
+        new_perimeter += ((max_col_n + max_row_n - min_col_n - min_row_n)*2);
+      }
+      double ofscore = 0.5 * ((area - new_area) + (perimeter - new_perimeter)); 
+      V_score_index_temp.push_back(std::make_pair(ofscore, f_idx));
+      ROCKS_LOG_DEBUG(ioptions.logger, "v_score_index_temp push: %f, %d \n", ofscore, f_idx);
+    }
+    std::sort(V_score_index_temp.rbegin(), V_score_index_temp.rend());
+    for (int b=0; b<end_index-1; b++){
+     ROCKS_LOG_DEBUG(ioptions.logger, "Sorted Output Level Vectors (score, index): %f, %d \n", V_score_index_temp[b].first, V_score_index_temp[b].second);
+    } 
+
+    int idx_temp = V_score_index_temp[0].second;
+    FileMetaData* f1_temp = new_inputs[idx_temp];
+    inputs->push_back(f1_temp); 
+    accum_sketch.addSketch(&(f1_temp->sketch));
+    ROCKS_LOG_DEBUG(ioptions.logger, "Accumulated Sketch: %s\n", accum_sketch.toString().c_str());
+
+    V_score_index.clear();
+    V_score_index = V_score_index_temp;
+    end_index -= 1;
   }
 
 }

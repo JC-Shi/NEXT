@@ -129,7 +129,7 @@ int main(int argc, char* argv[]) {
 
     // Setting k using the max_compaction_output_files_selected
     // k is the number of files in the output level selected for compaction
-    options.max_compaction_output_files_selected = 5;
+    options.max_compaction_output_files_selected = 3;
     std::cout << "compatction_output_selection = " << options.compaction_output_selection << std::endl;
 
     BlockBasedTableOptions block_based_options;

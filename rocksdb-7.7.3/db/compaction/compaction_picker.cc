@@ -573,28 +573,40 @@ bool CompactionPicker::SetupOtherInputs(
       break;
 
     case kByMbrOverlappingArea:{
-      // InternalKey smallest, largest;
-      // GetRange(*inputs, &smallest, &largest);
-      std::vector<Mbr> Mbr_vect;
-      GetMbrList(*inputs, &Mbr_vect);    
-      // ToChange: k
-      vstorage->GetOverlappingInputsWithMbr(output_level, &smallest, &largest,
-                                      &Mbr_vect, &output_level_inputs->files, 
-                                      ioptions, ioptions.max_compaction_output_files_selected, *parent_index, parent_index);
+      if (output_level == 1) {
+        vstorage->GetOverlappingInputs(output_level, &smallest, &largest,
+                                        &output_level_inputs->files, *parent_index,
+                                        parent_index);        
+      } else {
+        // InternalKey smallest, largest;
+        // GetRange(*inputs, &smallest, &largest);
+        std::vector<Mbr> Mbr_vect;
+        GetMbrList(*inputs, &Mbr_vect);    
+        // ToChange: k
+        vstorage->GetOverlappingInputsWithMbr(output_level, &smallest, &largest,
+                                        &Mbr_vect, &output_level_inputs->files, 
+                                        ioptions, ioptions.max_compaction_output_files_selected, *parent_index, parent_index);        
+      }
       break;}
 
     case kByScoreFunction:
-      SpatialSketch input_sketch_sum;
-      int input_lvl_area;
-      int input_lvl_perimeter;
-      int input_num_files;
-      GetInputsSketchs(*inputs, &input_sketch_sum, input_num_files, 
-                      input_lvl_area, input_lvl_perimeter);
-      vstorage->GetOverlappingInputsWithScoreFunction(output_level, &smallest, &largest,
-                        input_sketch_sum, &output_level_inputs->files,
-                        ioptions, ioptions.max_compaction_output_files_selected,
-                        input_num_files, input_lvl_area, input_lvl_perimeter,
-                        *parent_index, parent_index);
+      if (output_level ==1) {
+        vstorage->GetOverlappingInputs(output_level, &smallest, &largest,
+                                        &output_level_inputs->files, *parent_index,
+                                        parent_index);         
+      } else {
+        SpatialSketch input_sketch_sum;
+        int input_lvl_area;
+        int input_lvl_perimeter;
+        int input_num_files;
+        GetInputsSketchs(*inputs, &input_sketch_sum, input_num_files, 
+                        input_lvl_area, input_lvl_perimeter);
+        vstorage->GetOverlappingInputsWithScoreFunction(output_level, &smallest, &largest,
+                          input_sketch_sum, &output_level_inputs->files,
+                          ioptions, ioptions.max_compaction_output_files_selected,
+                          input_num_files, input_lvl_area, input_lvl_perimeter,
+                          *parent_index, parent_index);        
+      }
       break;
   }
 
