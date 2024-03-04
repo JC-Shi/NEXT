@@ -328,6 +328,7 @@ struct BlockBasedTableBuilder::Rep {
   const TableFileCreationReason reason;
 
   BlockHandle pending_handle;  // Handle to add to index block
+  BlockHandle sec_pending_handle; // Handle to add to secondary index block
 
   std::string compressed_output;
   std::unique_ptr<FlushBlockPolicy> flush_block_policy;
@@ -491,7 +492,7 @@ struct BlockBasedTableBuilder::Rep {
         table_options.sec_index_type, &internal_comparator,
         &this->internal_prefix_transform, use_delta_encoding_for_index_values,
         table_options));
-        std::cout << "sec index builder success" << std::endl;
+        // std::cout << "sec index builder success" << std::endl;
         // sec_index_builder.reset(RtreeSecondaryIndexBuilder::CreateIndexBuilder());
     }
     if (ioptions.optimize_filters_for_hits && tbo.is_bottommost) {
@@ -974,7 +975,7 @@ void BlockBasedTableBuilder::Add(const Slice& key, const Slice& value) {
           r->index_builder->AddIndexEntry(&r->last_key, &key,
                                           r->pending_handle);
           if (r->table_options.create_secondary_index) {
-            r->sec_index_builder->AddIndexEntry(&r->last_key, &key, r->pending_handle);
+            r->sec_index_builder->AddIndexEntry(&r->last_key, &key, r->sec_pending_handle);
           }
         }
       }
@@ -1390,7 +1391,7 @@ void BlockBasedTableBuilder::BGWorkWriteRawBlock() {
           Slice(*block_rep->first_key_in_next_block);
       r->index_builder->AddIndexEntry(&(block_rep->keys->Back()),
                                       &first_key_in_next_block,
-                                      r->pending_handle);
+                                      r->sec_pending_handle);
     }
 
     r->pc_rep->ReapBlock(block_rep);
@@ -1700,6 +1701,7 @@ void BlockBasedTableBuilder::WriteSecIndexBlock(
         if (!ok()) {
           break;
         }
+        // std::cout << "Meta_index_builder Sec Index Block item.first: " << item.first << std::endl;
         meta_index_builder->Add(item.first, block_handle);
       }
     }
@@ -1739,11 +1741,12 @@ void BlockBasedTableBuilder::WriteSecIndexBlock(
           if (!ok()) {
             break;
           }
-          std::cout << "meta_index_builder add secindexblock" << std::endl;
+          // std::cout << "Meta_index_builder Sec Index Block item.first: " << item.first << std::endl;
           meta_index_builder->Add(item.first, block_handle);
         }
       }
-      std::string sec_index_blk_name = "Secondary Index Block";
+      std::string sec_index_blk_name = "rocksdb.SecondaryIndexBlock";
+      // std::cout << "meta_index_builder added" << std::endl;
       meta_index_builder->Add(sec_index_blk_name, sec_index_block_handle);
     }
   }
@@ -2054,7 +2057,7 @@ void BlockBasedTableBuilder::EnterUnbuffered() {
                                         r->pending_handle);
         if (r->table_options.create_secondary_index) {
           r->sec_index_builder->AddIndexEntry(&last_key, first_key_in_next_block_ptr,
-                                        r->pending_handle);
+                                        r->sec_pending_handle);
         }
       }
     }

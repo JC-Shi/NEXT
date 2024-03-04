@@ -144,8 +144,10 @@ void DataBlockIter::NextImpl() {
   bool is_shared = false;
   if (!is_spatial_) {
     ParseNextDataKey(&is_shared);
-  } else {
+  } else if (!is_sec_index_scan) {
     ParseNextSpatialDataKey(&is_shared);
+  } else {
+    ParseNextSecSpatialDataKey(&is_shared);
   }
 }
 
@@ -527,8 +529,10 @@ void DataBlockIter::SeekToFirstImpl() {
   if (!is_spatial_) {
     ParseNextDataKey(&is_shared);
   }
-  else {
+  else if (!is_sec_index_scan) {
     ParseNextSpatialDataKey(&is_shared);
+  } else {
+    ParseNextSecSpatialDataKey(&is_shared);
   }
 }
 
@@ -670,6 +674,16 @@ bool DataBlockIter::ParseNextSpatialDataKey(bool* is_shared) {
     UpdateKey();
     // std::cout << "parsed first key" << std::endl;
   } while (Valid() && !IntersectMbr(key(), query_mbr_));
+  return ret;
+}
+
+bool DataBlockIter::ParseNextSecSpatialDataKey(bool* is_shared) {
+  bool ret = false;
+  do {
+    ret = ParseNextDataKey(is_shared);
+    UpdateKey();
+    // std::cout << "parsed first key" << std::endl;
+  } while (Valid() && !IntersectMbrExlucdeIID(value(), query_mbr_));
   return ret;
 }
 
@@ -1153,6 +1167,52 @@ DataBlockIter* Block::NewSpatialDataIterator(const Comparator* raw_ucmp,
   return ret_iter;
 }
 
+DataBlockIter* Block::NewSecondaryIndexDataIterator(const Comparator* raw_ucmp,
+                                      SequenceNumber global_seqno,
+                                      DataBlockIter* iter, Statistics* stats,
+                                      bool block_contents_pinned,
+                                      RtreeIteratorContext* context,
+                                      bool is_secondary_index_scan) {
+  // std::cout << "created new spatial data iterator" << std::endl;
+  DataBlockIter* ret_iter;
+  if (iter != nullptr) {
+    ret_iter = iter;
+  } else {
+    ret_iter = new DataBlockIter;
+  }
+  if (size_ < 2 * sizeof(uint32_t)) {
+    ret_iter->Invalidate(Status::Corruption("bad block contents"));
+    return ret_iter;
+  }
+  if (num_restarts_ == 0) {
+    // Empty block.
+    ret_iter->Invalidate(Status::OK());
+    return ret_iter;
+  } else {
+    if (context == nullptr && is_secondary_index_scan == false) {
+      ret_iter->Initialize(
+          raw_ucmp, data_, restart_offset_, num_restarts_, global_seqno,
+          read_amp_bitmap_.get(), block_contents_pinned,
+          data_block_hash_index_.Valid() ? &data_block_hash_index_ : nullptr); 
+    } else {
+      ret_iter->Initialize(
+          raw_ucmp, data_, restart_offset_, num_restarts_, global_seqno,
+          read_amp_bitmap_.get(), block_contents_pinned,
+          data_block_hash_index_.Valid() ? &data_block_hash_index_ : nullptr, context->query_mbr,
+          is_secondary_index_scan); 
+    }
+
+    if (read_amp_bitmap_) {
+      if (read_amp_bitmap_->GetStatistics() != stats) {
+        // DB changed the Statistics pointer, we need to notify read_amp_bitmap_
+        read_amp_bitmap_->SetStatistics(stats);
+      }
+    }
+  }
+
+  return ret_iter;
+}
+
 IndexBlockIter* Block::NewIndexIterator(
     const Comparator* raw_ucmp, SequenceNumber global_seqno,
     IndexBlockIter* iter, Statistics* /*stats*/, bool total_order_seek,
@@ -1299,6 +1359,35 @@ bool DataBlockIter::IntersectMbr(
 
     aa_min = *reinterpret_cast<const double*>(aa.data() + 24);
     aa_max = *reinterpret_cast<const double*>(aa.data() + 32);
+    if (aa_min > bb.second.max || bb.second.min > aa_max) {
+      return false;
+    }
+    return true;
+}
+
+bool DataBlockIter::IntersectMbrExlucdeIID(
+    const Slice& aa_orig,
+    Mbr bb) {
+  // If the query bounding box is empty, return true, which corresponds to a
+    // full table scan
+    if (bb.empty()) {
+      return true;
+    }
+
+    // Make a mutable copy of the slice
+    Slice aa = Slice(aa_orig);
+
+    double aa_min;
+    double aa_max;
+
+    aa_min = *reinterpret_cast<const double*>(aa.data());
+    aa_max = *reinterpret_cast<const double*>(aa.data() + 8);
+    if (aa_min > bb.first.max || bb.first.min > aa_max) {
+      return false;
+    }
+
+    aa_min = *reinterpret_cast<const double*>(aa.data() + 16);
+    aa_max = *reinterpret_cast<const double*>(aa.data() + 24);
     if (aa_min > bb.second.max || bb.second.min > aa_max) {
       return false;
     }

@@ -204,6 +204,14 @@ class Block {
                                  bool block_contents_pinned,
                                  RtreeIteratorContext* context);
 
+  DataBlockIter* NewSecondaryIndexDataIterator(const Comparator* raw_ucmp,
+                                 SequenceNumber global_seqno,
+                                 DataBlockIter* iter,
+                                 Statistics* stats,
+                                 bool block_contents_pinned,
+                                 RtreeIteratorContext* context,
+                                 bool is_secondary_index_scan);
+
   // Returns an MetaBlockIter for iterating over blocks containing metadata
   // (like Properties blocks).  Unlike data blocks, the keys for these blocks
   // do not contain sequence numbers, do not use a user-define comparator, and
@@ -523,6 +531,16 @@ class DataBlockIter : public BlockIter<Slice> {
     Initialize(raw_ucmp, data, restarts, num_restarts, global_seqno,
                read_amp_bitmap, block_contents_pinned, data_block_hash_index, query);
   }
+  DataBlockIter(const Comparator* raw_ucmp, const char* data, uint32_t restarts,
+                uint32_t num_restarts, SequenceNumber global_seqno,
+                BlockReadAmpBitmap* read_amp_bitmap, bool block_contents_pinned,
+                DataBlockHashIndex* data_block_hash_index, const std::string& query,
+                bool is_secondary_index_scan)
+      : DataBlockIter() {
+    Initialize(raw_ucmp, data, restarts, num_restarts, global_seqno,
+               read_amp_bitmap, block_contents_pinned, data_block_hash_index, query,
+               is_secondary_index_scan);
+  }  
   void Initialize(const Comparator* raw_ucmp, const char* data,
                   uint32_t restarts, uint32_t num_restarts,
                   SequenceNumber global_seqno,
@@ -536,6 +554,7 @@ class DataBlockIter : public BlockIter<Slice> {
     last_bitmap_offset_ = current_ + 1;
     data_block_hash_index_ = data_block_hash_index;
     is_spatial_ = false;
+    is_sec_index_scan = false;
   }
 
   void Initialize(const Comparator* raw_ucmp, const char* data,
@@ -554,6 +573,28 @@ class DataBlockIter : public BlockIter<Slice> {
     Slice query_slice(query);
     query_mbr_ = ReadQueryMbr(query_slice);
     is_spatial_ = true;
+    is_sec_index_scan = false;
+    // std::cout << "query_mbr_: " << query_mbr_ << std::endl;
+  }
+
+  void Initialize(const Comparator* raw_ucmp, const char* data,
+                  uint32_t restarts, uint32_t num_restarts,
+                  SequenceNumber global_seqno,
+                  BlockReadAmpBitmap* read_amp_bitmap,
+                  bool block_contents_pinned,
+                  DataBlockHashIndex* data_block_hash_index,
+                  const std::string& query,
+                  bool is_secondary_index_scan) {
+    InitializeBase(raw_ucmp, data, restarts, num_restarts, global_seqno,
+                   block_contents_pinned);
+    raw_key_.SetIsUserKey(false);
+    read_amp_bitmap_ = read_amp_bitmap;
+    last_bitmap_offset_ = current_ + 1;
+    data_block_hash_index_ = data_block_hash_index;
+    Slice query_slice(query);
+    query_mbr_ = ReadValueMbr(query_slice);
+    is_spatial_ = true;
+    is_sec_index_scan = is_secondary_index_scan;
     // std::cout << "query_mbr_: " << query_mbr_ << std::endl;
   }
 
@@ -591,6 +632,7 @@ class DataBlockIter : public BlockIter<Slice> {
   friend Block;
   inline bool ParseNextDataKey(bool* is_shared);
   inline bool ParseNextSpatialDataKey(bool* is_shared);
+  inline bool ParseNextSecSpatialDataKey(bool* is_shared);
   virtual void SeekToFirstImpl();
   void SeekToLastImpl() override;
   void SeekImpl(const Slice& target) override;
@@ -630,9 +672,14 @@ class DataBlockIter : public BlockIter<Slice> {
   DataBlockHashIndex* data_block_hash_index_;
 
   bool is_spatial_;
+  bool is_sec_index_scan;
   Mbr query_mbr_;
 
   bool IntersectMbr(
+        const Slice& aa_orig,
+        Mbr bb);
+  
+  bool IntersectMbrExlucdeIID(
         const Slice& aa_orig,
         Mbr bb);
 

@@ -231,6 +231,7 @@ struct BlockBasedTableOptions {
     kBinarySearchWithFirstKey = 0x03,
 
     kRtreeSearch = 0x04,
+    KRtreeSecSearch = 0x05,
   };
 
   IndexType index_type = kBinarySearch;

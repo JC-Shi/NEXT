@@ -7,6 +7,7 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file. See the AUTHORS file for names of contributors.
 #include "table/block_based/index_reader_common.h"
+#include "table/meta_blocks.h"
 
 namespace ROCKSDB_NAMESPACE {
 Status BlockBasedTable::IndexReaderCommon::ReadIndexBlock(
@@ -25,6 +26,35 @@ Status BlockBasedTable::IndexReaderCommon::ReadIndexBlock(
 
   const Status s = table->RetrieveBlock(
       prefetch_buffer, read_options, rep->footer.index_handle(),
+      UncompressionDict::GetEmptyDict(), index_block, BlockType::kIndex,
+      get_context, lookup_context, /* for_compaction */ false, use_cache,
+      /* wait_for_cache */ true, /* async_read */ false);
+
+  return s;
+}
+
+// Create a function to read secondary index block from metablock
+Status BlockBasedTable::IndexReaderCommon::ReadSecIndexBlock(
+    const BlockBasedTable* table, FilePrefetchBuffer* prefetch_buffer,
+    const ReadOptions& read_options, bool use_cache, GetContext* get_context,
+    BlockCacheLookupContext* lookup_context,
+    CachableEntry<Block>* index_block, InternalIterator* meta_index_iter) {
+  PERF_TIMER_GUARD(read_index_block_nanos);
+
+  assert(table != nullptr);
+  assert(index_block != nullptr);
+  assert(index_block->IsEmpty());
+
+  // const Rep* const rep = table->get_rep();
+  // assert(rep != nullptr);
+
+  BlockHandle secondary_index_handle;
+  std::string sec_index_blk_name = "rocksdb.SecondaryIndexBlock";
+  Status meta_s = 
+          FindMetaBlock(meta_index_iter, sec_index_blk_name, &secondary_index_handle);
+
+  const Status s = table->RetrieveBlock(
+      prefetch_buffer, read_options, secondary_index_handle,
       UncompressionDict::GetEmptyDict(), index_block, BlockType::kIndex,
       get_context, lookup_context, /* for_compaction */ false, use_cache,
       /* wait_for_cache */ true, /* async_read */ false);
@@ -53,4 +83,27 @@ Status BlockBasedTable::IndexReaderCommon::GetOrReadIndexBlock(
                         cache_index_blocks(), get_context, lookup_context,
                         index_block);
 }
+
+Status BlockBasedTable::IndexReaderCommon::GetOrReadSecIndexBlock(
+    bool no_io, Env::IOPriority rate_limiter_priority, GetContext* get_context,
+    BlockCacheLookupContext* lookup_context,
+    CachableEntry<Block>* index_block, InternalIterator* meta_index_iter) const {
+  assert(index_block != nullptr);
+
+  if (!index_block_.IsEmpty()) {
+    index_block->SetUnownedValue(index_block_.GetValue());
+    return Status::OK();
+  }
+
+  ReadOptions read_options;
+  read_options.rate_limiter_priority = rate_limiter_priority;
+  if (no_io) {
+    read_options.read_tier = kBlockCacheTier;
+  }
+
+  return ReadSecIndexBlock(table_, /*prefetch_buffer=*/nullptr, read_options,
+                        cache_index_blocks(), get_context, lookup_context,
+                        index_block, meta_index_iter);
+}
+
 }  // namespace ROCKSDB_NAMESPACE

@@ -297,6 +297,8 @@ class BlockBasedTable : public TableReader {
 
   friend class RtreeIndexReader;
 
+  friend class RtreeSecIndexReader;
+
   friend class UncompressionDictReader;
 
  protected:
@@ -346,6 +348,14 @@ class BlockBasedTable : public TableReader {
                                        TBlockIter* input_iter,
                                        bool block_contents_pinned,
                                        RtreeIteratorContext* iterator_context);
+
+  template <typename TBlockIter>
+  static TBlockIter* InitBlockIterator(const Rep* rep, Block* block,
+                                       BlockType block_type,
+                                       TBlockIter* input_iter,
+                                       bool block_contents_pinned,
+                                       RtreeIteratorContext* iterator_context,
+                                       bool is_secondary_index_scan);
 
   // Block::NewRtreeIterator().
   // template <typename TBlockIter>

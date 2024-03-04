@@ -45,7 +45,7 @@ void MetaIndexBuilder::Add(const std::string& key,
 
 Slice MetaIndexBuilder::Finish() {
   for (const auto& metablock : meta_block_handles_) {
-    std::cout << "metablock first" << metablock.first << std::endl;
+    // std::cout << "metablock first: " << metablock.first << std::endl;
     meta_index_block_->Add(metablock.first, metablock.second);
   }
   return meta_index_block_->Finish();

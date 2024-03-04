@@ -1705,6 +1705,9 @@ struct ReadOptions {
   // Adding Iterator_context
   IteratorContext* iterator_context;
 
+  // Adding Secondary Index Options
+  bool is_secondary_index_scan;
+
   ReadOptions();
   ReadOptions(bool cksum, bool cache);
 };

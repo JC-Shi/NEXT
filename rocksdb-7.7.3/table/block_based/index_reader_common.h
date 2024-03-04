@@ -33,6 +33,14 @@ class BlockBasedTable::IndexReaderCommon : public BlockBasedTable::IndexReader {
                                BlockCacheLookupContext* lookup_context,
                                CachableEntry<Block>* index_block);
 
+  static Status ReadSecIndexBlock(const BlockBasedTable* table,
+                                  FilePrefetchBuffer* prefetch_buffer,
+                                  const ReadOptions& read_options, bool use_cache,
+                                  GetContext* get_context,
+                                  BlockCacheLookupContext* lookup_context,
+                                  CachableEntry<Block>* index_block,
+                                  InternalIterator* meta_index_iter);
+
   const BlockBasedTable* table() const { return table_; }
 
   const InternalKeyComparator* internal_comparator() const {
@@ -70,6 +78,12 @@ class BlockBasedTable::IndexReaderCommon : public BlockBasedTable::IndexReader {
                              GetContext* get_context,
                              BlockCacheLookupContext* lookup_context,
                              CachableEntry<Block>* index_block) const;
+
+  Status GetOrReadSecIndexBlock(bool no_io, Env::IOPriority rate_limiter_priority,
+                             GetContext* get_context,
+                             BlockCacheLookupContext* lookup_context,
+                             CachableEntry<Block>* index_block,
+                             InternalIterator* meta_index_iter) const;
 
   size_t ApproximateIndexBlockMemoryUsage() const {
     assert(!index_block_.GetOwnValue() || index_block_.GetValue() != nullptr);

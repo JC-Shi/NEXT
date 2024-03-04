@@ -59,6 +59,7 @@
 #include "table/block_based/partitioned_filter_block.h"
 #include "table/block_based/partitioned_index_reader.h"
 #include "table/block_based/rtree_index_reader.h"
+#include "table/block_based/rtree_sec_index_reader.h"
 #include "table/block_fetcher.h"
 #include "table/format.h"
 #include "table/get_context.h"
@@ -1568,6 +1569,17 @@ DataBlockIter* BlockBasedTable::InitBlockIterator<DataBlockIter>(
                                 rep->ioptions.stats, block_contents_pinned, iterator_context);
 }
 
+template <>
+DataBlockIter* BlockBasedTable::InitBlockIterator<DataBlockIter>(
+    const Rep* rep, Block* block, BlockType block_type,
+    DataBlockIter* input_iter, bool block_contents_pinned, RtreeIteratorContext* iterator_context,
+    bool is_secondary_index_scan) {
+  return block->NewSecondaryIndexDataIterator(rep->internal_comparator.user_comparator(),
+                                rep->get_global_seqno(block_type), input_iter,
+                                rep->ioptions.stats, block_contents_pinned, iterator_context,
+                                is_secondary_index_scan);
+}
+
 // template <>
 // RtreeBlockIter* BlockBasedTable::InitBlockIterator(
 //     const Rep* rep, Block* block, BlockType block_type,
@@ -1578,6 +1590,21 @@ DataBlockIter* BlockBasedTable::InitBlockIterator<DataBlockIter>(
 //                                 rep->get_global_seqno(block_type), rtree_input_iter,
 //                                 rep->ioptions.stats, block_contents_pinned, iterator_context);
 // }
+
+template <>
+IndexBlockIter* BlockBasedTable::InitBlockIterator<IndexBlockIter>(
+    const Rep* rep, Block* block, BlockType block_type,
+    IndexBlockIter* input_iter, bool block_contents_pinned, 
+    RtreeIteratorContext* iterator_context, bool is_secondary_index_scan) {
+  (void)is_secondary_index_scan;
+  (void)iterator_context;
+  return block->NewIndexIterator(
+      rep->internal_comparator.user_comparator(),
+      rep->get_global_seqno(block_type), input_iter, rep->ioptions.stats,
+      /* total_order_seek */ true, rep->index_has_first_key,
+      rep->index_key_includes_seq, rep->index_value_is_full,
+      block_contents_pinned);
+}
 
 template <>
 IndexBlockIter* BlockBasedTable::InitBlockIterator<IndexBlockIter>(
@@ -2027,8 +2054,8 @@ InternalIterator* BlockBasedTable::NewIterator(
     const ReadOptions& read_options, const SliceTransform* prefix_extractor,
     Arena* arena, bool skip_filters, TableReaderCaller caller,
     size_t compaction_readahead_size, bool allow_unprepared_value) {
-  // std::cout << "start BlockBasedTable NewIterator" << std::endl;
-  // std::cout << "BlockBasedTable::NewIterator iterator context is nullptr: " << (read_options.iterator_context == nullptr) << std::endl;
+  std::cout << "start BlockBasedTable NewIterator" << std::endl;
+  std::cout << "BlockBasedTable::NewIterator iterator context is nullptr: " << (read_options.iterator_context == nullptr) << std::endl;
   BlockCacheLookupContext lookup_context{caller};
   bool need_upper_bound_check =
       read_options.auto_prefix_mode || PrefixExtractorChanged(prefix_extractor);
@@ -2690,6 +2717,12 @@ Status BlockBasedTable::CreateIndexReader(
       // return PartitionIndexReader::Create(this, ro, prefetch_buffer, use_cache,
       //                                     prefetch, pin, lookup_context,
       //                                     index_reader);
+    }
+    case BlockBasedTableOptions::KRtreeSecSearch:{
+      std::cout << "create RtreeSecIndexReader" << std::endl;
+      return RtreeSecIndexReader::Create(this, ro, prefetch_buffer, meta_iter,
+                                          use_cache, prefetch, pin, lookup_context,
+                                          index_reader);
     }
     default: {
       std::string error_message =

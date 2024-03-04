@@ -97,8 +97,15 @@ TBlockIter* BlockBasedTable::NewDataBlockIterator(
     // //       reinterpret_cast<RtreeBlockIter*>(iter);
     // iter = InitBlockIterator(rep_, block.GetValue(), BlockType::kData, iter,
     //                                    block_contents_pinned, iterator_context);
-    iter = InitBlockIterator(rep_, block.GetValue(), BlockType::kData, iter,
-                                       block_contents_pinned, iterator_context);
+    if (!ro.is_secondary_index_scan) {
+      iter = InitBlockIterator(rep_, block.GetValue(), BlockType::kData, iter,
+                                        block_contents_pinned, iterator_context);
+    } else {
+      iter = InitBlockIterator(rep_, block.GetValue(), BlockType::kData, iter,
+                                        block_contents_pinned, iterator_context,
+                                        ro.is_secondary_index_scan);      
+    }
+
   }
 
   if (!block.IsCached()) {
@@ -169,8 +176,15 @@ TBlockIter* BlockBasedTable::NewDataBlockIterator(const ReadOptions& ro,
     // //       reinterpret_cast<RtreeBlockIter*>(iter);
     // iter = InitBlockIterator(rep_, block.GetValue(), BlockType::kData, iter,
     //                                    block_contents_pinned, iterator_context);
-    iter = InitBlockIterator(rep_, block.GetValue(), BlockType::kData, iter,
-                                       block_contents_pinned, iterator_context);
+    if (!ro.is_secondary_index_scan) {
+      iter = InitBlockIterator(rep_, block.GetValue(), BlockType::kData, iter,
+                                        block_contents_pinned, iterator_context);
+    } else {
+      iter = InitBlockIterator(rep_, block.GetValue(), BlockType::kData, iter,
+                                        block_contents_pinned, iterator_context,
+                                        ro.is_secondary_index_scan);      
+    }
+
   }
 
   if (!block.IsCached()) {
