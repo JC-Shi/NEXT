@@ -158,7 +158,10 @@ int main(int argc, char* argv[]) {
 //            new NoiseFlushBlockPolicyFactory());
 
     block_based_options.create_secondary_index = true;
+    block_based_options.create_sec_index_reader = true;
+    // block_based_options.index_type = BlockBasedTableOptions::KRtreeSecSearch;
     options.table_factory.reset(NewBlockBasedTableFactory(block_based_options));
+    options.memtable_factory.reset(new rocksdb::SkipListSecFactory);
     
     // options.memtable_factory.reset(new rocksdb::SkipListMbrFactory);
     // options.memtable_factory.reset(new rocksdb::RTreeFactory);
@@ -219,7 +222,7 @@ int main(int argc, char* argv[]) {
         std::cout << "end writing data" << std::endl;
         std::cout << "Execution time: " << totalDuration.count() << " nanoseconds" << std::endl;
 
-        // sleep(30);
+        sleep(300);
         // std::string stats_value;
         // db->GetProperty("rocksdb.stats", &stats_value);
         // std::cout << stats_value << std::endl;

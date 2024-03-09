@@ -7,12 +7,12 @@
 
 namespace ROCKSDB_NAMESPACE {
 void RtreeSecIndexIterator::Seek(const Slice& target) { 
-  // std::cout << "RtreeIndexIterator Seek" << std::endl;
+  // std::cout << "RtreeSecIndexIterator Seek" << std::endl;
   SeekImpl(&target); 
 }
 
 void RtreeSecIndexIterator::SeekToFirst() { 
-  // std::cout << "RtreeIndexIterator SeekToFirst" << std::endl;
+  // std::cout << "RtreeSecIndexIterator SeekToFirst" << std::endl;
   SeekImpl(nullptr); 
 }
 
@@ -27,16 +27,19 @@ void RtreeSecIndexIterator::SeekImpl(const Slice* target) {
 
   index_iter_->SeekToFirst();
   ROCKS_LOG_DEBUG(table_->get_rep()->ioptions.logger, "top level index first entry mbr:  %s \n", ReadValueMbr(index_iter_->key()).toString().c_str());
-  // std::cout << "top level index first entry mbr: " << ReadQueryMbr(index_iter_->key()) << std::endl;
-  // std::cout << "index_iter_valid(): " << index_iter_->Valid() << " not intersect: " << (!IntersectMbr(ReadQueryMbr(index_iter_->key()), query_mbr_)) << std::endl;
+  ROCKS_LOG_DEBUG(table_->get_rep()->ioptions.logger, "Query mbr:  %s \n", query_mbr_.toString().c_str());
+  // std::cout << "top level index first entry mbr: " << ReadValueMbr(index_iter_->key()) << std::endl;
+  // std::cout << "index_iter_valid(): " << index_iter_->Valid() << " not intersect: " << (!IntersectMbrExcludeIID(ReadValueMbr(index_iter_->key()), query_mbr_)) << std::endl;
   while (index_iter_->Valid() && !IntersectMbrExcludeIID(ReadValueMbr(index_iter_->key()), query_mbr_)) {
     // std::cout << "skipping top level index entry" << std::endl;
     index_iter_->Next();
     // std::cout << "next top level index mbr: " << ReadQueryMbr(index_iter_->key()) << std::endl;
   }
   if (rtree_height_ > 2) {
+    // std::cout << "rtree_height > 2, rtree_height = " << rtree_height_ << std::endl;
     // if index_iter_ is Valid, and some of the next level node intersects with the query, add iterator to stack.
     if (index_iter_->Valid()) {
+      // std::cout << "index_iter_->Valid()" << std::endl;
       AddChildToStack();
     }
     // std::cout << "iterator_stack size: " << iterator_stack_.size() << std::endl;
@@ -46,12 +49,13 @@ void RtreeSecIndexIterator::SeekImpl(const Slice* target) {
       do {
         // std::cout << "skipping top level index entry" << std::endl;
         index_iter_->Next();
-        // std::cout << "next top level index mbr: " << ReadQueryMbr(index_iter_->key()) << std::endl;
+        // std::cout << "next top level index mbr: " << ReadValueMbr(index_iter_->key()) << std::endl;
       } while (index_iter_->Valid() && !IntersectMbrExcludeIID(ReadValueMbr(index_iter_->key()), query_mbr_));
       if (index_iter_->Valid()) {
         AddChildToStack();
       }
     }
+    // std::cout << "iterator_stack_empty:" << !iterator_stack_.empty() << " iterator_stacK_top() level > 2: " << (iterator_stack_.top()->level > 2) << std::endl;
     while(!iterator_stack_.empty() && iterator_stack_.top()->level > 2){
       StackElement* current_top = iterator_stack_.top();
       if (!current_top->block_iter.Valid()) {
@@ -85,12 +89,13 @@ void RtreeSecIndexIterator::SeekImpl(const Slice* target) {
     InitPartitionedIndexBlock();
   }
   else {
+    // std::cout << "rtree_sec_index_iterator.cc -> initpartionedindexblock" << std::endl;
     InitPartitionedIndexBlock(&(iterator_stack_.top()->block_iter));
   }
 
 
   block_iter_.SeekToFirst();
-  // std::cout << "block_iter_ initial MBR: " << ReadQueryMbr(block_iter_.key()) << std::endl;
+  // std::cout << "block_iter_ mbr: " << ReadValueMbr(block_iter_.key()) << std::endl;
   while (block_iter_.Valid() && !IntersectMbrExcludeIID(ReadValueMbr(block_iter_.key()), query_mbr_)) {
     block_iter_.Next();
   }
@@ -244,7 +249,7 @@ void RtreeSecIndexIterator::AddChildToStack() {
   if (new_element->block_iter.Valid()) {
     new_element->level = rtree_height_ - 1;
     iterator_stack_.push(new_element);
-    // std::cout << "added iterator to stack, mbr: " << ReadQueryMbr(new_element->block_iter.key()) << " level: " << new_element->level << std::endl;
+    // std::cout << "added iterator to stack, mbr: " << ReadValueMbr(new_element->block_iter.key()) << " level: " << new_element->level << std::endl;
   }
 }
 
@@ -287,7 +292,7 @@ void RtreeSecIndexIterator::FindBlockForward() {
     if (rtree_height_ == 2) {
       do {
         index_iter_->Next();
-        // std::cout << "next top level index mbr: " << ReadQueryMbr(index_iter_->key()) << std::endl;
+        // std::cout << "next top level index mbr: " << ReadValueMbr(index_iter_->key()) << std::endl;
       } while (index_iter_->Valid() && !IntersectMbrExcludeIID(ReadValueMbr(index_iter_->key()), query_mbr_));
     }
 
@@ -344,7 +349,7 @@ void RtreeSecIndexIterator::FindBlockForward() {
       // std::cout << "iterator MBR: " << ReadQueryMbr(iterator_stack_.top()->block_iter.key()) << std::endl;
     }
     block_iter_.SeekToFirst();
-    // std::cout << "block_iter_ MBR: " << ReadQueryMbr(block_iter_.key()) << std::endl;
+    // std::cout << "block_iter_ MBR: " << ReadValueMbr(block_iter_.key()) << std::endl;
   } while (!block_iter_.Valid());
 }
 

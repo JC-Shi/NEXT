@@ -29,6 +29,7 @@ Status RtreeSecIndexReader::Create(
   assert(index_reader != nullptr);
 
   CachableEntry<Block> index_block;
+  std::cout << "create rtreesecindexreader" << std::endl;
   if (prefetch || !use_cache) {
     // std::cout << "start reading index block" << std::endl;
 
@@ -113,6 +114,7 @@ InternalIteratorBase<IndexValue>* RtreeSecIndexReader::NewIterator(
     const ReadOptions& read_options, bool /* disable_prefix_seek */,
     IndexBlockIter* iter, GetContext* get_context,
     BlockCacheLookupContext* lookup_context) {
+  // std::cout << "rtreesecindexreader::newiterator" << std::endl;
   const bool no_io = (read_options.read_tier == kBlockCacheTier);
   CachableEntry<Block> index_block;
   const Status s = 
@@ -156,7 +158,8 @@ InternalIteratorBase<IndexValue>* RtreeSecIndexReader::NewIterator(
     ro.rate_limiter_priority = read_options.rate_limiter_priority;
     // std::cout << "adding iterator context" << std::endl;
     ro.iterator_context = read_options.iterator_context;
-    // std::cout << (ro.iterator_context == nullptr) << std::endl;
+    ro.is_secondary_index_scan = read_options.is_secondary_index_scan;
+    // std::cout << "rtree_sec_index_reader::" << (ro.iterator_context == nullptr) << std::endl;
     // RtreeIteratorContext* context =
     //     reinterpret_cast<RtreeIteratorContext*>(ro.iterator_context);
     // std::cout << context->query_mbr << std::endl;

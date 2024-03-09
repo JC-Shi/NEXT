@@ -350,12 +350,11 @@ class BlockBasedTable : public TableReader {
                                        RtreeIteratorContext* iterator_context);
 
   template <typename TBlockIter>
-  static TBlockIter* InitBlockIterator(const Rep* rep, Block* block,
+  static TBlockIter* InitBlockIterator(bool is_secondary_index_scan, const Rep* rep, Block* block,
                                        BlockType block_type,
                                        TBlockIter* input_iter,
                                        bool block_contents_pinned,
-                                       RtreeIteratorContext* iterator_context,
-                                       bool is_secondary_index_scan);
+                                       RtreeIteratorContext* iterator_context);
 
   // Block::NewRtreeIterator().
   // template <typename TBlockIter>
@@ -475,6 +474,13 @@ class BlockBasedTable : public TableReader {
                            bool use_cache, bool prefetch, bool pin,
                            BlockCacheLookupContext* lookup_context,
                            std::unique_ptr<IndexReader>* index_reader);
+
+  Status CreateSecIndexReader(const ReadOptions& ro,
+                           FilePrefetchBuffer* prefetch_buffer,
+                           InternalIterator* preloaded_meta_index_iter,
+                           bool use_cache, bool prefetch, bool pin,
+                           BlockCacheLookupContext* lookup_context,
+                           std::unique_ptr<IndexReader>* sec_index_reader);
 
   bool FullFilterKeyMayMatch(FilterBlockReader* filter, const Slice& user_key,
                              const bool no_io,
@@ -606,6 +612,7 @@ struct BlockBasedTable::Rep {
   Footer footer;
 
   std::unique_ptr<IndexReader> index_reader;
+  std::unique_ptr<IndexReader> sec_index_reader;
   std::unique_ptr<FilterBlockReader> filter;
   std::unique_ptr<UncompressionDictReader> uncompression_dict_reader;
 

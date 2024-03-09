@@ -100,6 +100,9 @@ int main(int argc, char* argv[]) {
 
     BlockBasedTableOptions block_based_options;
 
+    block_based_options.create_secondary_index = true;
+    block_based_options.create_sec_index_reader = true;
+
     // Set the block cache to 64 MB
     block_based_options.block_cache = rocksdb::NewLRUCache(64 * 1024 * 1024);
     // block_based_options.index_type = BlockBasedTableOptions::KRtreeSecSearch;
@@ -126,11 +129,13 @@ int main(int argc, char* argv[]) {
                 serialize_query(low[0], high[0], low[1], high[1]);
         read_options.iterator_context = &iterator_context;
         read_options.is_secondary_index_scan = true;
+        std::cout << "create newiterator" << std::endl;
         std::unique_ptr <rocksdb::Iterator> it(db->NewIterator(read_options));
-
+        std::cout << "created New iterator" << std::endl;
         int counter = 0;
         for (it->SeekToFirst(); it->Valid(); it->Next()) {
             Val value = deserialize_val(it->value());
+            // std::cout << value.mbr << std::endl;
             counter ++;
         }
         auto end = std::chrono::high_resolution_clock::now(); 

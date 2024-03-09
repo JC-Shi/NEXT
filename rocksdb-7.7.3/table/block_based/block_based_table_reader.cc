@@ -1139,11 +1139,30 @@ Status BlockBasedTable::PrefetchIndexAndFilterBlocks(
 
   rep_->index_reader = std::move(index_reader);
 
+  // create secondary index reader
+  // to prevent contentionn with pk index reader, a separated reader is needed
+  if (table_options.create_sec_index_reader) {
+    std::unique_ptr<IndexReader> sec_index_reader;
+    s = new_table->CreateSecIndexReader(ro, prefetch_buffer, meta_iter, use_cache,
+                                    prefetch_index, pin_index, lookup_context,
+                                    &sec_index_reader);
+
+    if (!s.ok()) {return s;}
+
+    rep_->sec_index_reader = std::move(sec_index_reader);
+  }
+
   // The partitions of partitioned index are always stored in cache. They
   // are hence follow the configuration for pin and prefetch regardless of
   // the value of cache_index_and_filter_blocks
   if (prefetch_all || pin_partition) {
     s = rep_->index_reader->CacheDependencies(ro, pin_partition);
+    if (table_options.create_sec_index_reader) {
+      if (!s.ok()) {
+        return s;
+      }
+      s = rep_->sec_index_reader->CacheDependencies(ro, pin_partition);
+    }
   }
   if (!s.ok()) {
     return s;
@@ -1227,6 +1246,9 @@ size_t BlockBasedTable::ApproximateMemoryUsage() const {
   }
   if (rep_->index_reader) {
     usage += rep_->index_reader->ApproximateMemoryUsage();
+  }
+  if (rep_->sec_index_reader) {
+    usage += rep_->sec_index_reader->ApproximateMemoryUsage();
   }
   if (rep_->uncompression_dict_reader) {
     usage += rep_->uncompression_dict_reader->ApproximateMemoryUsage();
@@ -1541,20 +1563,30 @@ InternalIteratorBase<IndexValue>* BlockBasedTable::NewIndexIterator(
     const ReadOptions& read_options, bool disable_prefix_seek,
     IndexBlockIter* input_iter, GetContext* get_context,
     BlockCacheLookupContext* lookup_context) const {
+  // std::cout << "BlockBasedTable::NewIndexIterator" << std::endl;
   assert(rep_ != nullptr);
   assert(rep_->index_reader != nullptr);
 
   // We don't return pinned data from index blocks, so no need
   // to set `block_contents_pinned`.
-  return rep_->index_reader->NewIterator(read_options, disable_prefix_seek,
-                                         input_iter, get_context,
-                                         lookup_context);
+  if (read_options.is_secondary_index_scan) {
+    assert(rep_->sec_index_reader != nullptr);
+    return rep_->sec_index_reader->NewIterator(read_options, disable_prefix_seek,
+                                              input_iter, get_context,
+                                              lookup_context);
+  } else {
+    return rep_->index_reader->NewIterator(read_options, disable_prefix_seek,
+                                          input_iter, get_context,
+                                          lookup_context);
+  }
+
 }
 
 template <>
 DataBlockIter* BlockBasedTable::InitBlockIterator<DataBlockIter>(
     const Rep* rep, Block* block, BlockType block_type,
     DataBlockIter* input_iter, bool block_contents_pinned) {
+  std::cout << "original initblockiterator" << std::endl;
   return block->NewDataIterator(rep->internal_comparator.user_comparator(),
                                 rep->get_global_seqno(block_type), input_iter,
                                 rep->ioptions.stats, block_contents_pinned);
@@ -1571,9 +1603,10 @@ DataBlockIter* BlockBasedTable::InitBlockIterator<DataBlockIter>(
 
 template <>
 DataBlockIter* BlockBasedTable::InitBlockIterator<DataBlockIter>(
+    bool is_secondary_index_scan,
     const Rep* rep, Block* block, BlockType block_type,
-    DataBlockIter* input_iter, bool block_contents_pinned, RtreeIteratorContext* iterator_context,
-    bool is_secondary_index_scan) {
+    DataBlockIter* input_iter, bool block_contents_pinned, RtreeIteratorContext* iterator_context) {
+  // std::cout << "NewSecondaryIndexDataIterator" << std::endl;
   return block->NewSecondaryIndexDataIterator(rep->internal_comparator.user_comparator(),
                                 rep->get_global_seqno(block_type), input_iter,
                                 rep->ioptions.stats, block_contents_pinned, iterator_context,
@@ -1593,9 +1626,9 @@ DataBlockIter* BlockBasedTable::InitBlockIterator<DataBlockIter>(
 
 template <>
 IndexBlockIter* BlockBasedTable::InitBlockIterator<IndexBlockIter>(
-    const Rep* rep, Block* block, BlockType block_type,
+    bool is_secondary_index_scan, const Rep* rep, Block* block, BlockType block_type,
     IndexBlockIter* input_iter, bool block_contents_pinned, 
-    RtreeIteratorContext* iterator_context, bool is_secondary_index_scan) {
+    RtreeIteratorContext* iterator_context) {
   (void)is_secondary_index_scan;
   (void)iterator_context;
   return block->NewIndexIterator(
@@ -2054,8 +2087,8 @@ InternalIterator* BlockBasedTable::NewIterator(
     const ReadOptions& read_options, const SliceTransform* prefix_extractor,
     Arena* arena, bool skip_filters, TableReaderCaller caller,
     size_t compaction_readahead_size, bool allow_unprepared_value) {
-  std::cout << "start BlockBasedTable NewIterator" << std::endl;
-  std::cout << "BlockBasedTable::NewIterator iterator context is nullptr: " << (read_options.iterator_context == nullptr) << std::endl;
+  // std::cout << "start BlockBasedTable NewIterator" << std::endl;
+  // std::cout << "BlockBasedTable::NewIterator iterator context is nullptr: " << (read_options.iterator_context == nullptr) << std::endl;
   BlockCacheLookupContext lookup_context{caller};
   bool need_upper_bound_check =
       read_options.auto_prefix_mode || PrefixExtractorChanged(prefix_extractor);
@@ -2682,7 +2715,12 @@ Status BlockBasedTable::CreateIndexReader(
     InternalIterator* meta_iter, bool use_cache, bool prefetch, bool pin,
     BlockCacheLookupContext* lookup_context,
     std::unique_ptr<IndexReader>* index_reader) {
-  // std::cout << "start CreateIndexReader" << std::endl;
+  std::cout << "start CreateIndexReader" << std::to_string(rep_->index_type) << std::endl;
+  // if(ro.is_secondary_index_scan == true) {
+  //   return RtreeSecIndexReader::Create(this, ro, prefetch_buffer, meta_iter,
+  //                                         use_cache, prefetch, pin, lookup_context,
+  //                                         index_reader);
+  // } else {
   switch (rep_->index_type) {
     case BlockBasedTableOptions::kTwoLevelIndexSearch: {
       return PartitionIndexReader::Create(this, ro, prefetch_buffer, use_cache,
@@ -2693,21 +2731,21 @@ Status BlockBasedTable::CreateIndexReader(
       FALLTHROUGH_INTENDED;
     case BlockBasedTableOptions::kBinarySearchWithFirstKey: {
       return BinarySearchIndexReader::Create(this, ro, prefetch_buffer,
-                                             use_cache, prefetch, pin,
-                                             lookup_context, index_reader);
+                                            use_cache, prefetch, pin,
+                                            lookup_context, index_reader);
     }
     case BlockBasedTableOptions::kHashSearch: {
       if (!rep_->table_prefix_extractor) {
         ROCKS_LOG_WARN(rep_->ioptions.logger,
-                       "Missing prefix extractor for hash index. Fall back to"
-                       " binary search index.");
+                      "Missing prefix extractor for hash index. Fall back to"
+                      " binary search index.");
         return BinarySearchIndexReader::Create(this, ro, prefetch_buffer,
-                                               use_cache, prefetch, pin,
-                                               lookup_context, index_reader);
+                                              use_cache, prefetch, pin,
+                                              lookup_context, index_reader);
       } else {
         return HashIndexReader::Create(this, ro, prefetch_buffer, meta_iter,
-                                       use_cache, prefetch, pin, lookup_context,
-                                       index_reader);
+                                      use_cache, prefetch, pin, lookup_context,
+                                      index_reader);
       }
     }
     case BlockBasedTableOptions::kRtreeSearch: {
@@ -2719,7 +2757,6 @@ Status BlockBasedTable::CreateIndexReader(
       //                                     index_reader);
     }
     case BlockBasedTableOptions::KRtreeSecSearch:{
-      std::cout << "create RtreeSecIndexReader" << std::endl;
       return RtreeSecIndexReader::Create(this, ro, prefetch_buffer, meta_iter,
                                           use_cache, prefetch, pin, lookup_context,
                                           index_reader);
@@ -2730,6 +2767,20 @@ Status BlockBasedTable::CreateIndexReader(
       return Status::InvalidArgument(error_message.c_str());
     }
   }
+  // }
+}
+
+Status BlockBasedTable::CreateSecIndexReader(
+    const ReadOptions& ro, FilePrefetchBuffer* prefetch_buffer,
+    InternalIterator* meta_iter, bool use_cache, bool prefetch, bool pin,
+    BlockCacheLookupContext* lookup_context,
+    std::unique_ptr<IndexReader>* sec_index_reader) {
+  std::cout << "start CreateSecIndexReader"  << std::endl;
+
+  return RtreeSecIndexReader::Create(this, ro, prefetch_buffer, meta_iter,
+                                        use_cache, prefetch, pin, lookup_context,
+                                        sec_index_reader);
+
 }
 
 uint64_t BlockBasedTable::ApproximateDataOffsetOf(

@@ -144,7 +144,7 @@ void DataBlockIter::NextImpl() {
   bool is_shared = false;
   if (!is_spatial_) {
     ParseNextDataKey(&is_shared);
-  } else if (!is_sec_index_scan) {
+  } else if (!is_sec_index_scan_) {
     ParseNextSpatialDataKey(&is_shared);
   } else {
     ParseNextSecSpatialDataKey(&is_shared);
@@ -526,10 +526,11 @@ void DataBlockIter::SeekToFirstImpl() {
   }
   SeekToRestartPoint(0);
   bool is_shared = false;
+  // std::cout << "seekforfirstimpl" << std::endl;
   if (!is_spatial_) {
     ParseNextDataKey(&is_shared);
   }
-  else if (!is_sec_index_scan) {
+  else if (!is_sec_index_scan_) {
     ParseNextSpatialDataKey(&is_shared);
   } else {
     ParseNextSecSpatialDataKey(&is_shared);
@@ -549,6 +550,7 @@ void IndexBlockIter::SeekToFirstImpl() {
   if (data_ == nullptr) {  // Not init yet
     return;
   }
+  // std::cout << "using SeekToFirstImpl of indexblockiter" << std::endl;
   status_ = Status::OK();
   SeekToRestartPoint(0);
   ParseNextIndexKey();
@@ -682,7 +684,7 @@ bool DataBlockIter::ParseNextSecSpatialDataKey(bool* is_shared) {
   do {
     ret = ParseNextDataKey(is_shared);
     UpdateKey();
-    // std::cout << "parsed first key" << std::endl;
+    // std::cout << "parsed first sec spatial key" << std::endl;
   } while (Valid() && !IntersectMbrExlucdeIID(value(), query_mbr_));
   return ret;
 }

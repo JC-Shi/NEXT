@@ -1706,7 +1706,8 @@ struct ReadOptions {
   IteratorContext* iterator_context;
 
   // Adding Secondary Index Options
-  bool is_secondary_index_scan;
+  // Default: false
+  bool is_secondary_index_scan=false;
 
   ReadOptions();
   ReadOptions(bool cksum, bool cache);

@@ -328,7 +328,7 @@ struct BlockBasedTableBuilder::Rep {
   const TableFileCreationReason reason;
 
   BlockHandle pending_handle;  // Handle to add to index block
-  BlockHandle sec_pending_handle; // Handle to add to secondary index block
+  // BlockHandle sec_pending_handle; // Handle to add to secondary index block
 
   std::string compressed_output;
   std::unique_ptr<FlushBlockPolicy> flush_block_policy;
@@ -975,7 +975,7 @@ void BlockBasedTableBuilder::Add(const Slice& key, const Slice& value) {
           r->index_builder->AddIndexEntry(&r->last_key, &key,
                                           r->pending_handle);
           if (r->table_options.create_secondary_index) {
-            r->sec_index_builder->AddIndexEntry(&r->last_key, &key, r->sec_pending_handle);
+            r->sec_index_builder->AddIndexEntry(&r->last_key, &key, r->pending_handle);
           }
         }
       }
@@ -1386,12 +1386,21 @@ void BlockBasedTableBuilder::BGWorkWriteRawBlock() {
     if (block_rep->first_key_in_next_block == nullptr) {
       r->index_builder->AddIndexEntry(&(block_rep->keys->Back()), nullptr,
                                       r->pending_handle);
+      if (r->table_options.create_sec_index_reader) {
+        r->sec_index_builder->AddIndexEntry(&(block_rep->keys->Back()), nullptr,
+                                        r->pending_handle);
+      }
     } else {
       Slice first_key_in_next_block =
           Slice(*block_rep->first_key_in_next_block);
       r->index_builder->AddIndexEntry(&(block_rep->keys->Back()),
                                       &first_key_in_next_block,
-                                      r->sec_pending_handle);
+                                      r->pending_handle);
+      if (r->table_options.create_sec_index_reader) {
+        r->sec_index_builder->AddIndexEntry(&(block_rep->keys->Back()),
+                                      &first_key_in_next_block,
+                                      r->pending_handle);
+      }
     }
 
     r->pc_rep->ReapBlock(block_rep);
@@ -2057,7 +2066,7 @@ void BlockBasedTableBuilder::EnterUnbuffered() {
                                         r->pending_handle);
         if (r->table_options.create_secondary_index) {
           r->sec_index_builder->AddIndexEntry(&last_key, first_key_in_next_block_ptr,
-                                        r->sec_pending_handle);
+                                        r->pending_handle);
         }
       }
     }
@@ -2095,6 +2104,9 @@ Status BlockBasedTableBuilder::Finish() {
     if (ok() && !empty_data_block) {
       r->index_builder->AddIndexEntry(
           &r->last_key, nullptr /* no next data block */, r->pending_handle);
+          if (r->table_options.create_sec_index_reader) {
+            r->sec_index_builder->AddIndexEntry(&r->last_key, nullptr /* no next data block */, r->pending_handle);
+          }
     }
   }
 

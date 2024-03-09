@@ -309,6 +309,7 @@ class BlockIter : public InternalIteratorBase<TValue> {
   bool Valid() const override { return current_ < restarts_; }
 
   virtual void SeekToFirst() override final {
+    // std::cout << "seektofirst" << std::endl;
     SeekToFirstImpl();
     UpdateKey();
   }
@@ -554,7 +555,7 @@ class DataBlockIter : public BlockIter<Slice> {
     last_bitmap_offset_ = current_ + 1;
     data_block_hash_index_ = data_block_hash_index;
     is_spatial_ = false;
-    is_sec_index_scan = false;
+    is_sec_index_scan_ = false;
   }
 
   void Initialize(const Comparator* raw_ucmp, const char* data,
@@ -573,7 +574,7 @@ class DataBlockIter : public BlockIter<Slice> {
     Slice query_slice(query);
     query_mbr_ = ReadQueryMbr(query_slice);
     is_spatial_ = true;
-    is_sec_index_scan = false;
+    is_sec_index_scan_ = false;
     // std::cout << "query_mbr_: " << query_mbr_ << std::endl;
   }
 
@@ -594,7 +595,7 @@ class DataBlockIter : public BlockIter<Slice> {
     Slice query_slice(query);
     query_mbr_ = ReadValueMbr(query_slice);
     is_spatial_ = true;
-    is_sec_index_scan = is_secondary_index_scan;
+    is_sec_index_scan_ = is_secondary_index_scan;
     // std::cout << "query_mbr_: " << query_mbr_ << std::endl;
   }
 
@@ -672,7 +673,7 @@ class DataBlockIter : public BlockIter<Slice> {
   DataBlockHashIndex* data_block_hash_index_;
 
   bool is_spatial_;
-  bool is_sec_index_scan;
+  bool is_sec_index_scan_;
   Mbr query_mbr_;
 
   bool IntersectMbr(

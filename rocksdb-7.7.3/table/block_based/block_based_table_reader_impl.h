@@ -101,9 +101,8 @@ TBlockIter* BlockBasedTable::NewDataBlockIterator(
       iter = InitBlockIterator(rep_, block.GetValue(), BlockType::kData, iter,
                                         block_contents_pinned, iterator_context);
     } else {
-      iter = InitBlockIterator(rep_, block.GetValue(), BlockType::kData, iter,
-                                        block_contents_pinned, iterator_context,
-                                        ro.is_secondary_index_scan);      
+      iter = InitBlockIterator(ro.is_secondary_index_scan, rep_, block.GetValue(), BlockType::kData, iter,
+                                        block_contents_pinned, iterator_context);      
     }
 
   }
@@ -180,9 +179,8 @@ TBlockIter* BlockBasedTable::NewDataBlockIterator(const ReadOptions& ro,
       iter = InitBlockIterator(rep_, block.GetValue(), BlockType::kData, iter,
                                         block_contents_pinned, iterator_context);
     } else {
-      iter = InitBlockIterator(rep_, block.GetValue(), BlockType::kData, iter,
-                                        block_contents_pinned, iterator_context,
-                                        ro.is_secondary_index_scan);      
+      iter = InitBlockIterator(ro.is_secondary_index_scan, rep_, block.GetValue(), BlockType::kData, iter,
+                                        block_contents_pinned, iterator_context);      
     }
 
   }

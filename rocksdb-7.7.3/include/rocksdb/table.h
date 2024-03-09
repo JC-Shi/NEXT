@@ -237,6 +237,7 @@ struct BlockBasedTableOptions {
   IndexType index_type = kBinarySearch;
 
   bool create_secondary_index = false;
+  bool create_sec_index_reader = false;
 
   enum SecondaryIndexType : char {
     // Secondary index type
