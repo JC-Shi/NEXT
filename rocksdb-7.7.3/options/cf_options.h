@@ -87,6 +87,9 @@ struct ImmutableCFOptions {
   std::shared_ptr<SstPartitionerFactory> sst_partitioner_factory;
 
   std::shared_ptr<Cache> blob_cache;
+
+  bool global_sec_index;
+  char* global_index_loc;
 };
 
 struct ImmutableOptions : public ImmutableDBOptions, public ImmutableCFOptions {
@@ -171,7 +174,9 @@ struct MutableCFOptions {
             options.memtable_protection_bytes_per_key),
         sample_for_compression(
             options.sample_for_compression),  // TODO: is 0 fine here?
-        compression_per_level(options.compression_per_level) {
+        compression_per_level(options.compression_per_level),
+        create_global_sec_index(options.create_global_sec_index),
+        global_sec_index_loc(options.global_sec_index_loc) {
     RefreshDerivedOptions(options.num_levels, options.compaction_style);
   }
 
@@ -218,7 +223,9 @@ struct MutableCFOptions {
         bottommost_compression(kDisableCompressionOption),
         last_level_temperature(Temperature::kUnknown),
         memtable_protection_bytes_per_key(0),
-        sample_for_compression(0) {}
+        sample_for_compression(0),
+        create_global_sec_index(false),
+        global_sec_index_loc(nullptr) {}
 
   explicit MutableCFOptions(const Options& options);
 
@@ -310,6 +317,10 @@ struct MutableCFOptions {
 
   uint64_t sample_for_compression;
   std::vector<CompressionType> compression_per_level;
+
+  // global secondary index options
+  bool create_global_sec_index;
+  char* global_sec_index_loc;
 
   // Derived options
   // Per-level target file size.

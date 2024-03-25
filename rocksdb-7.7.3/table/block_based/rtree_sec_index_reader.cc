@@ -29,7 +29,7 @@ Status RtreeSecIndexReader::Create(
   assert(index_reader != nullptr);
 
   CachableEntry<Block> index_block;
-  std::cout << "create rtreesecindexreader" << std::endl;
+  // std::cout << "create rtreesecindexreader" << std::endl;
   if (prefetch || !use_cache) {
     // std::cout << "start reading index block" << std::endl;
 

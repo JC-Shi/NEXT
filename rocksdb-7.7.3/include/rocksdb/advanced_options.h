@@ -1064,6 +1064,11 @@ struct AdvancedColumnFamilyOptions {
   // Supported values: 0, 1, 2, 4, 8.
   uint32_t memtable_protection_bytes_per_key = 0;
 
+  // Enable global secondary index creation
+  // TODO(Jiachen): type of secondary index selection
+  bool create_global_sec_index = false;
+  char* global_sec_index_loc = nullptr;
+
   // Create ColumnFamilyOptions with default values for all fields
   AdvancedColumnFamilyOptions();
   // Create ColumnFamilyOptions from Options

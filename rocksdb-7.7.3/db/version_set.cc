@@ -2129,7 +2129,11 @@ Version::Version(ColumnFamilyData* column_family_data, VersionSet* vset,
       max_file_size_for_l0_meta_pin_(
           MaxFileSizeForL0MetaPin(mutable_cf_options_)),
       version_number_(version_number),
-      io_tracer_(io_tracer) {}
+      io_tracer_(io_tracer) {
+        if (mutable_cf_options.create_global_sec_index) {
+          global_rtree_.Load(mutable_cf_options.global_sec_index_loc);
+        }
+      }
 
 Status Version::GetBlob(const ReadOptions& read_options, const Slice& user_key,
                         const Slice& blob_index_slice,

@@ -156,9 +156,15 @@ int main(int argc, char* argv[]) {
     // block_based_options.index_type = BlockBasedTableOptions::kTwoLevelIndexSearch;
 //    block_based_options.flush_block_policy_factory.reset(
 //            new NoiseFlushBlockPolicyFactory());
-
+    
+    // For per file secondary index in SST file
     block_based_options.create_secondary_index = true;
     block_based_options.create_sec_index_reader = true;
+    
+    // For global secondary index in memory
+    options.create_global_sec_index = true;
+    options.global_sec_index_loc = argv[4];
+
     // block_based_options.index_type = BlockBasedTableOptions::KRtreeSecSearch;
     options.table_factory.reset(NewBlockBasedTableFactory(block_based_options));
     options.memtable_factory.reset(new rocksdb::SkipListSecFactory);

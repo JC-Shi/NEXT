@@ -4,7 +4,7 @@
 #include <iostream>
 
 #include "db/memtable.h"
-#include "memtable/RTree_mem.h"
+#include "util/RTree_mem.h"
 #include "rocksdb/memtablerep.h"
 #include "rocksdb/utilities/options_type.h"
 #include "util/string_util.h"
@@ -15,7 +15,7 @@ namespace {
 
 class RtreeRep : public MemTableRep {
     typedef char* ValueType;
-    typedef RTree<ValueType, int, 2, float> MyTree;
+    typedef RTree<ValueType, double, 2, double> MyTree;
     MyTree rtree_;
 
  public:
@@ -192,10 +192,10 @@ bool RtreeRep::Contains(const char* key) const {
     Mbr key_mbr = ReadKeyMbr(user_key);
     Rect key_rect(key_mbr.first.min, key_mbr.second.min, key_mbr.first.max, key_mbr.second.max);
 
-    int nhits;
+    std::vector<char*> nhits;
     nhits = rtree_.Search(key_rect.min, key_rect.max, MySearchCallback);
     
-    if (nhits > 0) {
+    if (nhits.size() > 0) {
         return true;
     } else {
         return false;

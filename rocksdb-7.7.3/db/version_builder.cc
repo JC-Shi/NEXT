@@ -32,6 +32,7 @@
 #include "port/port.h"
 #include "table/table_reader.h"
 #include "util/string_util.h"
+#include "util/RTree_mem.h"
 
 namespace ROCKSDB_NAMESPACE {
 
@@ -676,6 +677,28 @@ class VersionBuilder::Rep {
     return meta->oldest_blob_file_number;
   }
 
+  Mbr GetMbrForTableFile(int level,
+                        uint64_t file_number) const {
+    assert(level < num_levels_);
+
+    const auto& added_files = levels_[level].added_files;
+
+    auto it = added_files.find(file_number);
+    if (it != added_files.end()) {
+      const FileMetaData* const meta = it->second;
+      assert(meta);
+
+      return meta->mbr;
+    }
+
+    assert(base_vstorage_);
+    const FileMetaData* const meta =
+        base_vstorage_->GetFileMetaDataByNumber(file_number);
+    assert(meta);
+
+    return meta->mbr;
+  }  
+
   Status ApplyFileDeletion(int level, uint64_t file_number) {
     assert(level != VersionStorageInfo::FileLocation::Invalid().GetLevel());
 
@@ -836,6 +859,17 @@ class VersionBuilder::Rep {
       }
     }
 
+    // if global secondary index is activated
+    // when applying version edits to a version
+    // A global secondary rtree will be initiated by load from current file
+    // then changes of files will be applied on the rtree and save it back
+    typedef std::pair<int, uint64_t> GlobalSecDataType;
+    typedef RTree<GlobalSecDataType, double, 2, double> GlobalSecRtree;
+    GlobalSecRtree global_rtree;    
+    if (ioptions_->global_sec_index) {
+      global_rtree.Load(ioptions_->global_index_loc);
+    }
+
     // Note: we process the blob file related changes first because the
     // table file addition/deletion logic depends on the blob files
     // already being there.
@@ -861,6 +895,14 @@ class VersionBuilder::Rep {
       const int level = deleted_file.first;
       const uint64_t file_number = deleted_file.second;
 
+      // if global rtree is activated
+      // remove entry from global rtree for each deleted files
+      if(ioptions_->global_index_loc) {
+        const Mbr filembr = GetMbrForTableFile(level, file_number);
+        Rect filerect(filembr.first.min, filembr.second.min, filembr.first.max, filembr.second.max);
+        global_rtree.Remove(filerect.min, filerect.max, std::make_pair(level, file_number));
+      }
+
       const Status s = ApplyFileDeletion(level, file_number);
       if (!s.ok()) {
         return s;
@@ -871,6 +913,16 @@ class VersionBuilder::Rep {
     for (const auto& new_file : edit->GetNewFiles()) {
       const int level = new_file.first;
       const FileMetaData& meta = new_file.second;
+
+      // Add an entry to global rtree for each new file
+      // the index value will be rect based on mbr
+      // the index data contains file level and filenumber
+      if(ioptions_->global_sec_index) {
+        const Mbr filembr = meta.mbr;
+        Rect filerect(filembr.first.min, filembr.second.min, filembr.first.max, filembr.second.max);
+        const uint64_t filenumber = meta.fd.GetNumber();
+        global_rtree.Insert(filerect.min, filerect.max, std::make_pair(level, filenumber));
+      }
 
       const Status s = ApplyFileAddition(level, meta);
       if (!s.ok()) {
@@ -888,6 +940,12 @@ class VersionBuilder::Rep {
         return s;
       }
     }
+
+    // after all the process, save the global secondary index to the file location
+    if(ioptions_->global_index_loc) {
+      global_rtree.Save(ioptions_->global_index_loc);
+    }
+
     return Status::OK();
   }
 

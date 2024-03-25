@@ -61,6 +61,7 @@
 #include "util/autovector.h"
 #include "util/coro_utils.h"
 #include "util/hash_containers.h"
+#include "util/RTree_mem.h"
 
 namespace ROCKSDB_NAMESPACE {
 
@@ -1076,6 +1077,13 @@ class Version {
   const MutableCFOptions mutable_cf_options_;
   // Cached value to avoid recomputing it on every read.
   const size_t max_file_size_for_l0_meta_pin_;
+
+  // For Global Secondary Index
+  // TODO(Jiachen) setting the variable based on the sec index type
+  // Currently this may be mannually adjusted
+  typedef std::pair<int, uint64_t> GlobalSecDataType;
+  typedef RTree<GlobalSecDataType, double, 2, double> GlobalSecRtree;
+  GlobalSecRtree global_rtree_;
 
   // A version number that uniquely represents this version. This is
   // used for debugging and logging purposes only.

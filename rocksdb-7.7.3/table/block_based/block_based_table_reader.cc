@@ -1586,7 +1586,7 @@ template <>
 DataBlockIter* BlockBasedTable::InitBlockIterator<DataBlockIter>(
     const Rep* rep, Block* block, BlockType block_type,
     DataBlockIter* input_iter, bool block_contents_pinned) {
-  std::cout << "original initblockiterator" << std::endl;
+  // std::cout << "original initblockiterator" << std::endl;
   return block->NewDataIterator(rep->internal_comparator.user_comparator(),
                                 rep->get_global_seqno(block_type), input_iter,
                                 rep->ioptions.stats, block_contents_pinned);
@@ -2715,7 +2715,7 @@ Status BlockBasedTable::CreateIndexReader(
     InternalIterator* meta_iter, bool use_cache, bool prefetch, bool pin,
     BlockCacheLookupContext* lookup_context,
     std::unique_ptr<IndexReader>* index_reader) {
-  std::cout << "start CreateIndexReader" << std::to_string(rep_->index_type) << std::endl;
+  // std::cout << "start CreateIndexReader" << std::to_string(rep_->index_type) << std::endl;
   // if(ro.is_secondary_index_scan == true) {
   //   return RtreeSecIndexReader::Create(this, ro, prefetch_buffer, meta_iter,
   //                                         use_cache, prefetch, pin, lookup_context,

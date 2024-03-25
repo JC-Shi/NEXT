@@ -287,7 +287,7 @@ namespace rocksdb {
     struct Rect {
         Rect () {}
 
-        Rect(int a_minX, int a_minY, int a_maxX, int a_maxY)
+        Rect(double a_minX, double a_minY, double a_maxX, double a_maxY)
         {
             min[0] = a_minX;
             min[1] = a_minY;
@@ -296,8 +296,8 @@ namespace rocksdb {
             max[1] = a_maxY;
         }
 
-        int min[2];
-        int max[2];
+        double min[2];
+        double max[2];
     };
 
     extern double GetMbrArea(Mbr aa);
