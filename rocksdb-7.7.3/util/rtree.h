@@ -10,6 +10,7 @@
 #include <sstream>
 #include <algorithm>
 #include <math.h>
+#include <iostream>
 
 #include "rocksdb/options.h"
 
@@ -315,5 +316,7 @@ namespace rocksdb {
     extern std::string serializeMbrExcludeIID(const Mbr& mbr);
     extern void expandMbr(Mbr& to_expand, Mbr expander);
     extern void expandMbrExcludeIID(Mbr& to_expand, Mbr expander);
+
+    extern bool GlobalRTreeCallback(std::pair<int, uint64_t> index_data);
 
 }  // namespace rocksdb

@@ -74,6 +74,7 @@
 #include "util/stop_watch.h"
 #include "util/string_util.h"
 #include "util/user_comparator_wrapper.h"
+#include "util/rtree.h"
 
 // Generate the regular and coroutine versions of some methods by
 // including version_set_sync_and_async.h twice
@@ -1911,9 +1912,14 @@ void Version::AddIterators(const ReadOptions& read_options,
                            bool allow_unprepared_value) {
   assert(storage_info_.finalized_);
 
-  for (int level = 0; level < storage_info_.num_non_empty_levels(); level++) {
-    AddIteratorsForLevel(read_options, soptions, merge_iter_builder, level,
-                         allow_unprepared_value);
+  if(mutable_cf_options_.create_global_sec_index){
+    int level = 0;
+    AddIteratorsForLevel(read_options,soptions,merge_iter_builder,level, allow_unprepared_value);
+  } else {
+    for (int level = 0; level < storage_info_.num_non_empty_levels(); level++) {
+      AddIteratorsForLevel(read_options, soptions, merge_iter_builder, level,
+                          allow_unprepared_value);
+    }
   }
 }
 
@@ -1933,11 +1939,42 @@ void Version::AddIteratorsForLevel(const ReadOptions& read_options,
   bool should_sample = should_sample_file_read();
 
   auto* arena = merge_iter_builder->GetArena();
-  if (level == 0) {
-    // Merge all level zero files together since they may overlap
+
+  // When global secondary index is activated
+  // the iterator for level will be created based on the outputs from
+  // global secondary index
+  if(mutable_cf_options_.create_global_sec_index) {
+    
+    // getting the search range
+    RtreeIteratorContext* context = 
+        reinterpret_cast<RtreeIteratorContext*>(read_options.iterator_context);
+    Slice query_slice(context->query_mbr);
+    Mbr query_mbr = ReadSecQueryMbr(query_slice);
+
+    // getting the indexed data from the global secondary index
+    // based on the query range
+    Rect query_rect(query_mbr.first.min, query_mbr.second.min, query_mbr.first.max, query_mbr.second.max);
+    std::vector<std::pair<int, uint64_t>> hittedFiles;
+    // std::cout << "query_rect: " << query_rect.min[0] << query_rect.max[0] << std::endl; 
+    hittedFiles = global_rtree_.Search(query_rect.min, query_rect.max, GlobalRTreeCallback);
+
+    // iterating through the return vector
+    // find the level and position of each file and 
+    // create the respective table_iter
     TruncatedRangeDelIterator* tombstone_iter = nullptr;
-    for (size_t i = 0; i < storage_info_.LevelFilesBrief(0).num_files; i++) {
-      const auto& file = storage_info_.LevelFilesBrief(0).files[i];
+    int n_hits = static_cast<int>(hittedFiles.size());
+    // std::cout << "return hits: " << n_hits << std::endl;    
+
+    for (int i = 0; i < n_hits; i++) {
+      // find the file_number of the hitted file
+      uint64_t hfile_number = hittedFiles[i].second;
+      // std::cout << "file number:" << hfile_number << std::endl;
+      // get the file location
+      // file_level: location.GetLevel()
+      // file_position: location.GetPosition()
+      auto hfile_loc = storage_info_.GetFileLocation(hfile_number);
+      // create the iterator
+      const auto& file = storage_info_.LevelFilesBrief(hfile_loc.GetLevel()).files[hfile_loc.GetPosition()];
       auto table_iter = cfd_->table_cache()->NewIterator(
           read_options, soptions, cfd_->internal_comparator(),
           *file.file_metadata, /*range_del_agg=*/nullptr,
@@ -1947,44 +1984,70 @@ void Version::AddIteratorsForLevel(const ReadOptions& read_options,
           /*skip_filters=*/false, /*level=*/0, max_file_size_for_l0_meta_pin_,
           /*smallest_compaction_key=*/nullptr,
           /*largest_compaction_key=*/nullptr, allow_unprepared_value,
-          &tombstone_iter);
+          &tombstone_iter);    
       if (read_options.ignore_range_deletions) {
         merge_iter_builder->AddIterator(table_iter);
       } else {
         merge_iter_builder->AddPointAndTombstoneIterator(table_iter,
-                                                         tombstone_iter);
-      }
+                                                        tombstone_iter);
+        }
     }
-    if (should_sample) {
-      // Count ones for every L0 files. This is done per iterator creation
-      // rather than Seek(), while files in other levels are recored per seek.
-      // If users execute one range query per iterator, there may be some
-      // discrepancy here.
-      for (FileMetaData* meta : storage_info_.LevelFiles(0)) {
-        sample_file_read_inc(meta);
+  } else {
+    if (level == 0) {
+      // Merge all level zero files together since they may overlap
+      TruncatedRangeDelIterator* tombstone_iter = nullptr;
+      for (size_t i = 0; i < storage_info_.LevelFilesBrief(0).num_files; i++) {
+        const auto& file = storage_info_.LevelFilesBrief(0).files[i];
+        auto table_iter = cfd_->table_cache()->NewIterator(
+            read_options, soptions, cfd_->internal_comparator(),
+            *file.file_metadata, /*range_del_agg=*/nullptr,
+            mutable_cf_options_.prefix_extractor, nullptr,
+            cfd_->internal_stats()->GetFileReadHist(0),
+            TableReaderCaller::kUserIterator, arena,
+            /*skip_filters=*/false, /*level=*/0, max_file_size_for_l0_meta_pin_,
+            /*smallest_compaction_key=*/nullptr,
+            /*largest_compaction_key=*/nullptr, allow_unprepared_value,
+            &tombstone_iter);
+        if (read_options.ignore_range_deletions) {
+          merge_iter_builder->AddIterator(table_iter);
+        } else {
+          merge_iter_builder->AddPointAndTombstoneIterator(table_iter,
+                                                          tombstone_iter);
+        }
       }
-    }
-  } else if (storage_info_.LevelFilesBrief(level).num_files > 0) {
-    // For levels > 0, we can use a concatenating iterator that sequentially
-    // walks through the non-overlapping files in the level, opening them
-    // lazily.
-    auto* mem = arena->AllocateAligned(sizeof(LevelIterator));
-    TruncatedRangeDelIterator*** tombstone_iter_ptr = nullptr;
-    auto level_iter = new (mem) LevelIterator(
-        cfd_->table_cache(), read_options, soptions,
-        cfd_->internal_comparator(), &storage_info_.LevelFilesBrief(level),
-        mutable_cf_options_.prefix_extractor, should_sample_file_read(),
-        cfd_->internal_stats()->GetFileReadHist(level),
-        TableReaderCaller::kUserIterator, IsFilterSkipped(level), level,
-        /*range_del_agg=*/nullptr, /*compaction_boundaries=*/nullptr,
-        allow_unprepared_value, &tombstone_iter_ptr);
-    if (read_options.ignore_range_deletions) {
-      merge_iter_builder->AddIterator(level_iter);
-    } else {
-      merge_iter_builder->AddPointAndTombstoneIterator(
-          level_iter, nullptr /* tombstone_iter */, tombstone_iter_ptr);
+      if (should_sample) {
+        // Count ones for every L0 files. This is done per iterator creation
+        // rather than Seek(), while files in other levels are recored per seek.
+        // If users execute one range query per iterator, there may be some
+        // discrepancy here.
+        for (FileMetaData* meta : storage_info_.LevelFiles(0)) {
+          sample_file_read_inc(meta);
+        }
+      }
+    } else if (storage_info_.LevelFilesBrief(level).num_files > 0) {
+      // For levels > 0, we can use a concatenating iterator that sequentially
+      // walks through the non-overlapping files in the level, opening them
+      // lazily.
+      auto* mem = arena->AllocateAligned(sizeof(LevelIterator));
+      TruncatedRangeDelIterator*** tombstone_iter_ptr = nullptr;
+      auto level_iter = new (mem) LevelIterator(
+          cfd_->table_cache(), read_options, soptions,
+          cfd_->internal_comparator(), &storage_info_.LevelFilesBrief(level),
+          mutable_cf_options_.prefix_extractor, should_sample_file_read(),
+          cfd_->internal_stats()->GetFileReadHist(level),
+          TableReaderCaller::kUserIterator, IsFilterSkipped(level), level,
+          /*range_del_agg=*/nullptr, /*compaction_boundaries=*/nullptr,
+          allow_unprepared_value, &tombstone_iter_ptr);
+      if (read_options.ignore_range_deletions) {
+        merge_iter_builder->AddIterator(level_iter);
+      } else {
+        merge_iter_builder->AddPointAndTombstoneIterator(
+            level_iter, nullptr /* tombstone_iter */, tombstone_iter_ptr);
+      }
     }
   }
+
+  
 }
 
 Status Version::OverlapWithLevelIterator(const ReadOptions& read_options,
@@ -2131,6 +2194,8 @@ Version::Version(ColumnFamilyData* column_family_data, VersionSet* vset,
       version_number_(version_number),
       io_tracer_(io_tracer) {
         if (mutable_cf_options.create_global_sec_index) {
+          // TODO(Jiachen) based on the secondary index type
+          // the global_sec_index shall load different files
           global_rtree_.Load(mutable_cf_options.global_sec_index_loc);
         }
       }

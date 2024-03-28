@@ -366,7 +366,7 @@ protected:
   bool Overlap(Rect* a_rectA, Rect* a_rectB) const;
   void ReInsert(Node* a_node, ListNode** a_listNode);
   bool Search(Node* a_node, Rect* a_rect, int& a_foundCount, std::function<bool (const DATATYPE&)> callback) const;
-  bool Search(Node* a_node, Rect* a_rect, std::vector<DATATYPE> a_returnres, std::function<bool (const DATATYPE&)> callback) const;
+  bool Search(Node* a_node, Rect* a_rect, std::vector<DATATYPE>& a_returnres, std::function<bool (const DATATYPE&)> callback) const;
   void RemoveAllRec(Node* a_node);
   void Reset();
   void CountRec(Node* a_node, int& a_count);
@@ -567,6 +567,7 @@ std::vector<DATATYPE> RTREE_QUAL::Search(const ELEMTYPE a_min[NUMDIMS], const EL
 
   std::vector<DATATYPE> return_res;
   // int foundCount = 0;
+  // std::cout << "start search" << std::endl;
   Search(m_root, &rect, return_res, callback);
 
   return return_res;
@@ -1662,7 +1663,7 @@ bool RTREE_QUAL::Search(Node* a_node, Rect* a_rect, int& a_foundCount, std::func
 }
 
 RTREE_TEMPLATE
-bool RTREE_QUAL::Search(Node* a_node, Rect* a_rect, std::vector<DATATYPE> a_return_res, std::function<bool (const DATATYPE&)> callback) const
+bool RTREE_QUAL::Search(Node* a_node, Rect* a_rect, std::vector<DATATYPE>& a_return_res, std::function<bool (const DATATYPE&)> callback) const
 {
   ASSERT(a_node);
   ASSERT(a_node->m_level >= 0);
@@ -1691,6 +1692,7 @@ bool RTREE_QUAL::Search(Node* a_node, Rect* a_rect, std::vector<DATATYPE> a_retu
       if(Overlap(a_rect, &a_node->m_branch[index].m_rect))
       {
         DATATYPE& indexdata = a_node->m_branch[index].m_data;
+        // std::cout << "found data" << std::endl;
         a_return_res.push_back(indexdata);
 
           if(callback && !callback(indexdata))

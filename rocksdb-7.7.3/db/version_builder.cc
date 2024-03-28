@@ -22,6 +22,7 @@
 #include <unordered_set>
 #include <utility>
 #include <vector>
+#include <iostream>
 
 #include "cache/cache_reservation_manager.h"
 #include "db/blob/blob_file_meta.h"
@@ -897,8 +898,9 @@ class VersionBuilder::Rep {
 
       // if global rtree is activated
       // remove entry from global rtree for each deleted files
-      if(ioptions_->global_index_loc) {
+      if(ioptions_->global_sec_index) {
         const Mbr filembr = GetMbrForTableFile(level, file_number);
+        // std::cout << "deleted mbr: " << filembr << std::endl;
         Rect filerect(filembr.first.min, filembr.second.min, filembr.first.max, filembr.second.max);
         global_rtree.Remove(filerect.min, filerect.max, std::make_pair(level, file_number));
       }
@@ -918,10 +920,12 @@ class VersionBuilder::Rep {
       // the index value will be rect based on mbr
       // the index data contains file level and filenumber
       if(ioptions_->global_sec_index) {
-        const Mbr filembr = meta.mbr;
+        Mbr filembr = meta.mbr;
+        // std::cout << "added mbr: " << filembr << std::endl;
         Rect filerect(filembr.first.min, filembr.second.min, filembr.first.max, filembr.second.max);
         const uint64_t filenumber = meta.fd.GetNumber();
         global_rtree.Insert(filerect.min, filerect.max, std::make_pair(level, filenumber));
+        // std::cout << "filerect: " << filerect.min[0] << ";" << filerect.max[0] << std::endl;
       }
 
       const Status s = ApplyFileAddition(level, meta);
@@ -942,8 +946,9 @@ class VersionBuilder::Rep {
     }
 
     // after all the process, save the global secondary index to the file location
-    if(ioptions_->global_index_loc) {
+    if(ioptions_->global_sec_index) {
       global_rtree.Save(ioptions_->global_index_loc);
+      // std::cout << "global rtree saved" << std::endl;
     }
 
     return Status::OK();

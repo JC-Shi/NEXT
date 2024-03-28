@@ -58,12 +58,21 @@ Status FileMetaData::UpdateBoundaries(const Slice& key, const Slice& value,
   fd.smallest_seqno = std::min(fd.smallest_seqno, seqno);
   fd.largest_seqno = std::max(fd.largest_seqno, seqno);
 
-  // update mbr 
-  InternalKey key_temp;
-  key_temp.DecodeFrom(key);
-  Mbr key_mbr = ReadKeyMbr(key_temp.user_key());
-  expandMbr(mbr, key_mbr);
-  sketch.addMbr(key_mbr);
+  // update mbr based on key
+  // InternalKey key_temp;
+  // key_temp.DecodeFrom(key);
+  // Mbr key_mbr = ReadKeyMbr(key_temp.user_key());
+  // expandMbr(mbr, key_mbr);
+  // sketch.addMbr(key_mbr);
+
+  // For secondary index, update mbr and sketch based on the value
+  // TODO(Jiachen)
+  // for different secondary attributes,
+  // different meta data shall be used
+  // support for different attribute will be added later
+  Mbr value_mbr = ReadValueMbr(value);
+  expandMbrExcludeIID(mbr, value_mbr);
+  sketch.addMbr(value_mbr);
 
   return Status::OK();
 }

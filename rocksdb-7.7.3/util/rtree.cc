@@ -191,4 +191,11 @@ namespace rocksdb {
         }
   }
 
+  bool GlobalRTreeCallback(std::pair<int, uint64_t> index_data) {
+    // nothing to do yet
+    // std::cout << "call back data" << std::endl;
+    (void) index_data;
+    return true;
+  }
+
 }  // namespace rocksdb
