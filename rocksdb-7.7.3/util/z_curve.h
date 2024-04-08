@@ -10,41 +10,12 @@
 #include <algorithm>
 #include <math.h>
 #include "rocksdb/options.h"
+#include "util/rtree.h"
 
 namespace rocksdb {
 
-    bool less_msb(uint32_t x, uint32_t y) {
-        return (x < y) && (x < (x ^ y));
-    }
-
-    extern int comp_z_order (uint32_t x_a_int, uint32_t y_a_int, uint32_t x_b_int, uint32_t y_b_int) {
-        if (less_msb(x_a_int ^ x_b_int, y_a_int ^ y_b_int)) {
-            if (y_a_int < y_b_int) {
-                return -1;
-            }
-            else if (y_a_int > y_b_int) {
-                return 1;
-            }
-        }
-        if (x_a_int < x_b_int) {
-            return -1;
-        }
-        else if (x_a_int > x_b_int) {
-            return 1;
-        }
-        return 0;
-    }
-
-    extern uint32_t xy2z(int level, uint32_t x, uint32_t y) {
-        uint32_t key = 0;
-        for (int i = 0; i < level; i++) {
-            key |= (x & 1) << (2 * i + 1);
-            key |= (y & 1) << (2 * i);
-            x >>= 1;
-            y >>= 1;
-        }
-        return key;
-    }
+    extern int comp_z_order (uint32_t x_a_int, uint32_t y_a_int, uint32_t x_b_int, uint32_t y_b_int);
+    extern uint32_t xy2z(int level, uint32_t x, uint32_t y);
 
     class ZComparator : public rocksdb::Comparator {
     public:
@@ -130,18 +101,13 @@ namespace rocksdb {
             Slice slice_a = Slice(const_a);
             Slice slice_b = Slice(const_b);
 
-            // keypaths are the same, compare the value. The previous
-            // `GetLengthPrefixedSlice()` did advance the Slice already, hence a call
-            // to `.data()` can directly be used.
-            const uint64_t* value_a = reinterpret_cast<const uint64_t*>(slice_a.data());
-            const uint64_t* value_b = reinterpret_cast<const uint64_t*>(slice_b.data());
+            Mbr a_mbr = ReadSecQueryMbr(slice_a);
+            Mbr b_mbr = ReadSecQueryMbr(slice_b);
 
-            double x_a = *reinterpret_cast<const double*>(slice_a.data());
-            double x_b = *reinterpret_cast<const double*>(slice_b.data());
-            double y_a = *reinterpret_cast<const double*>(slice_a.data() + 16);
-            double y_b = *reinterpret_cast<const double*>(slice_b.data() + 16);
-
-            // std::cout << x_a << " " << x_b << " " << y_a << " " << y_b << std::endl;
+            double x_a = (a_mbr.first.min + a_mbr.first.max) / 2;
+            double y_a = (a_mbr.second.min + a_mbr.second.max) / 2;
+            double x_b = (b_mbr.first.min + b_mbr.first.max) / 2;
+            double y_b = (b_mbr.second.min + b_mbr.second.max) / 2;
 
             double x_min = -12.2304942;
             double x_max = 37.4497039;
@@ -161,23 +127,22 @@ namespace rocksdb {
             // }
             // uint32_t bit = 1;
 
-            int comp = comp_z_order(x_a_int, y_a_int, x_b_int, y_b_int);
-            if (comp != 0) {
-                return comp;
-            }
-
-            if (*value_a < *value_b) {
-                return -1;
-            } else if (*value_a > *value_b) {
-                return 1;
-            } else {
-                return 0;
-            }
-
+            // FOR WRITE
+            // int comp = comp_z_order(x_a_int, y_a_int, x_b_int, y_b_int);
+            // if (comp != 0) {
+            //     return comp;
+            // } else {
+            //     return 0;
+            // }
 
             // TODO: options.compaction_policy query/write
             // Specifically for R-tree as r-tree does not implement ordering
-            // return 1;
+            // FOR READ
+            (void) x_a_int;
+            (void) x_b_int;
+            (void) y_a_int;
+            (void) y_b_int;
+            return 1;
         }
 
         void FindShortestSeparator(std::string* start,

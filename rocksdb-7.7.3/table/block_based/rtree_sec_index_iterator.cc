@@ -22,18 +22,19 @@ void RtreeSecIndexIterator::SeekImpl(const Slice* target) {
   if (target != nullptr) {
     // The target for seek function here for secondary index shall be value
     query_mbr_ = ReadValueMbr(*target);
-    // std::cout << "query_mbr_: " << query_mbr_ << std::endl;
+    std::cout << "target query_mbr_: " << query_mbr_ << std::endl;
   }
 
   index_iter_->SeekToFirst();
   ROCKS_LOG_DEBUG(table_->get_rep()->ioptions.logger, "top level index first entry mbr:  %s \n", ReadValueMbr(index_iter_->key()).toString().c_str());
   ROCKS_LOG_DEBUG(table_->get_rep()->ioptions.logger, "Query mbr:  %s \n", query_mbr_.toString().c_str());
   // std::cout << "top level index first entry mbr: " << ReadValueMbr(index_iter_->key()) << std::endl;
+  // std::cout << "query mbr: " << query_mbr_ << std::endl;
   // std::cout << "index_iter_valid(): " << index_iter_->Valid() << " not intersect: " << (!IntersectMbrExcludeIID(ReadValueMbr(index_iter_->key()), query_mbr_)) << std::endl;
   while (index_iter_->Valid() && !IntersectMbrExcludeIID(ReadValueMbr(index_iter_->key()), query_mbr_)) {
     // std::cout << "skipping top level index entry" << std::endl;
     index_iter_->Next();
-    // std::cout << "next top level index mbr: " << ReadQueryMbr(index_iter_->key()) << std::endl;
+    // std::cout << "next top level index mbr: " << ReadSecQueryMbr(index_iter_->key()) << std::endl;
   }
   if (rtree_height_ > 2) {
     // std::cout << "rtree_height > 2, rtree_height = " << rtree_height_ << std::endl;
@@ -69,7 +70,7 @@ void RtreeSecIndexIterator::SeekImpl(const Slice* target) {
         do {
           // std::cout << "skipping top level index entry" << std::endl;
           index_iter_->Next();
-          // std::cout << "next top level index mbr: " << ReadQueryMbr(index_iter_->key()) << std::endl;
+          // std::cout << "next top level index mbr: " << ReadSecQueryMbr(index_iter_->key()) << std::endl;
         } while (index_iter_->Valid() && !IntersectMbrExcludeIID(ReadValueMbr(index_iter_->key()), query_mbr_));
         if (index_iter_->Valid()) {
           AddChildToStack();
@@ -260,7 +261,7 @@ void RtreeSecIndexIterator::AddChildToStack(StackElement* current_top) {
   if (new_element->block_iter.Valid()) {
     new_element->level = current_top->level - 1;
     iterator_stack_.push(new_element);
-    std:: cout << "added iterator to stack, mbr: " << ReadValueMbr(new_element->block_iter.key()) << "level: " << new_element->level << std::endl;
+    // std:: cout << "added iterator to stack, mbr: " << ReadValueMbr(new_element->block_iter.key()) << "level: " << new_element->level << std::endl;
   }
 }
 

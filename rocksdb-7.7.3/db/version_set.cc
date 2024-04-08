@@ -1963,7 +1963,7 @@ void Version::AddIteratorsForLevel(const ReadOptions& read_options,
     // create the respective table_iter
     TruncatedRangeDelIterator* tombstone_iter = nullptr;
     int n_hits = static_cast<int>(hittedFiles.size());
-    // std::cout << "return hits: " << n_hits << std::endl;    
+    std::cout << "return hits: " << n_hits << std::endl;    
 
     for (int i = 0; i < n_hits; i++) {
       // find the file_number of the hitted file

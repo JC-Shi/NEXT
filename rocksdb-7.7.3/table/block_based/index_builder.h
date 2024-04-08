@@ -128,7 +128,9 @@ class SecondaryIndexBuilder {
     Slice index_block_contents;
     std::unordered_map<std::string, Slice> meta_blocks;
   };
-  explicit SecondaryIndexBuilder(const InternalKeyComparator* comparator)
+  // explicit SecondaryIndexBuilder(const InternalKeyComparator* comparator)
+  //     : comparator_(comparator) {}
+  explicit SecondaryIndexBuilder(const Comparator* comparator)
       : comparator_(comparator) {}
 
   virtual ~SecondaryIndexBuilder() {}
@@ -183,7 +185,8 @@ class SecondaryIndexBuilder {
   virtual bool seperator_is_key_plus_seq() { return true; }
 
  protected:
-  const InternalKeyComparator* comparator_;
+  // const InternalKeyComparator* comparator_;
+  const Comparator* comparator_;
   // Set after ::Finish is called
   size_t index_size_ = 0;
 };
@@ -782,7 +785,8 @@ class RtreeIndexBuilder : public IndexBuilder {
 class RtreeSecondaryIndexLevelBuilder : public SecondaryIndexBuilder {
  public:
   explicit RtreeSecondaryIndexLevelBuilder(
-      const InternalKeyComparator* comparator,
+      // const InternalKeyComparator* comparator,
+      const Comparator* comparator,
       const int index_block_restart_interval, const uint32_t format_version,
       const bool use_value_delta_encoding,
       BlockBasedTableOptions::IndexShorteningMode shortening_mode,
@@ -909,11 +913,13 @@ class RtreeSecondaryIndexLevelBuilder : public SecondaryIndexBuilder {
 class RtreeSecondaryIndexBuilder : public SecondaryIndexBuilder {
  public:
   static RtreeSecondaryIndexBuilder* CreateIndexBuilder(
-      const ROCKSDB_NAMESPACE::InternalKeyComparator* comparator,
+      // const ROCKSDB_NAMESPACE::InternalKeyComparator* comparator,
+      const Comparator* comparator,
       const bool use_value_delta_encoding,
       const BlockBasedTableOptions& table_opt);
 
-  explicit RtreeSecondaryIndexBuilder(const InternalKeyComparator* comparator,
+  explicit RtreeSecondaryIndexBuilder(const Comparator* comparator,
+                                  //  const InternalKeyComparator* comparator,
                                    const BlockBasedTableOptions& table_opt,
                                    const bool use_value_delta_encoding);
 
@@ -969,8 +975,17 @@ class RtreeSecondaryIndexBuilder : public SecondaryIndexBuilder {
     //     return *this;
     // }
   };
+  struct DataBlockEntry {
+    BlockHandle datablockhandle;
+    std::string datablocklastkey;
+    std::string subindexenclosingmbr;
+  };
+  void AddIdxEntry(DataBlockEntry datablkentry, bool last=false);
+  DataBlockEntry last_index_entry_;
+
   std::list<Entry> entries_;  // list of partitioned indexes and their keys
   std::list<Entry> next_level_entries_;  // list of partitioned indexes and their keys
+  std::list<DataBlockEntry> data_block_entries_;
   BlockBuilder index_block_builder_;              // top-level index builder
   // the active partition index builder
   RtreeSecondaryIndexLevelBuilder* sub_index_builder_;

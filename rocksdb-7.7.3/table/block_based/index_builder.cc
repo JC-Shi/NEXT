@@ -22,6 +22,7 @@
 #include "table/block_based/partitioned_filter_block.h"
 #include "table/format.h"
 #include "util/rtree.h"
+#include "util/z_curve.h"
 
 namespace ROCKSDB_NAMESPACE {
 
@@ -90,11 +91,13 @@ SecondaryIndexBuilder* SecondaryIndexBuilder::CreateSecIndexBuilder(
     const bool use_value_delta_encoding,
     const BlockBasedTableOptions& table_opt) {
   (void) int_key_slice_transform;
+  (void) comparator;
   SecondaryIndexBuilder* result = nullptr;
   switch (sec_index_type) {
     case BlockBasedTableOptions::kRtreeSec: {
+      ZComparator4SecondaryIndex cmp4sec;
       result =RtreeSecondaryIndexBuilder::CreateIndexBuilder(
-          comparator, use_value_delta_encoding, table_opt);
+          &cmp4sec, use_value_delta_encoding, table_opt);
       break;
     }
     default: {
@@ -561,7 +564,8 @@ size_t RtreeIndexBuilder::NumPartitions() const { return partition_cnt_; }
 // }
 
 RtreeSecondaryIndexBuilder* RtreeSecondaryIndexBuilder::CreateIndexBuilder(
-    const InternalKeyComparator* comparator,
+    // const InternalKeyComparator* comparator,
+    const Comparator* comparator,
     const bool use_value_delta_encoding,
     const BlockBasedTableOptions& table_opt) {
   return new RtreeSecondaryIndexBuilder(comparator, table_opt,
@@ -569,7 +573,8 @@ RtreeSecondaryIndexBuilder* RtreeSecondaryIndexBuilder::CreateIndexBuilder(
 }
 
 RtreeSecondaryIndexBuilder::RtreeSecondaryIndexBuilder(
-    const InternalKeyComparator* comparator,
+    // const InternalKeyComparator* comparator,
+    const Comparator* comparator,
     const BlockBasedTableOptions& table_opt,
     const bool use_value_delta_encoding)
     : SecondaryIndexBuilder(comparator),
@@ -611,17 +616,34 @@ void RtreeSecondaryIndexBuilder::OnKeyAdded(const Slice& value){
 void RtreeSecondaryIndexBuilder::AddIndexEntry(
     std::string* last_key_in_current_block,
     const Slice* first_key_in_next_block, const BlockHandle& block_handle) {
-  expandMbrExcludeIID(enclosing_mbr_, sub_index_enclosing_mbr_);
+  // expandMbrExcludeIID(enclosing_mbr_, sub_index_enclosing_mbr_);
+  (void) first_key_in_next_block;
+  DataBlockEntry dbe;
+  dbe.datablockhandle = block_handle;
+  dbe.datablocklastkey = std::string(*last_key_in_current_block);
+  dbe.subindexenclosingmbr = serializeMbrExcludeIID(sub_index_enclosing_mbr_);
+  // if (UNLIKELY(first_key_in_next_block == nullptr)) {
+  //   last_index_entry_ = dbe;
+  //   sub_index_enclosing_mbr_.clear();
+  // } else {
+  data_block_entries_.push_back(dbe);
+  sub_index_enclosing_mbr_.clear();    
+  // }
+}
+
+void RtreeSecondaryIndexBuilder::AddIdxEntry(DataBlockEntry datablkentry, bool last) {
+  expandMbrExcludeIID(enclosing_mbr_, ReadSecQueryMbr(datablkentry.subindexenclosingmbr));
   // std::cout << "enclosing_mbr_: " << enclosing_mbr_ << std::endl;
   // Note: to avoid two consecuitive flush in the same method call, we do not
   // check flush policy when adding the last key
-  if (UNLIKELY(first_key_in_next_block == nullptr)) {  // no more keys
+  if (UNLIKELY(last == true)) {  // no more keys
     if (sub_index_builder_ == nullptr) {
       MakeNewSubIndexBuilder();
     }
-    sub_index_builder_->AddIndexEntry(block_handle, serializeMbrExcludeIID(sub_index_enclosing_mbr_));
+    sub_index_builder_->AddIndexEntry(datablkentry.datablockhandle, datablkentry.subindexenclosingmbr);
 
-    sub_index_last_key_ = std::string(*last_key_in_current_block);
+    // std::cout << "pushed mbr: " << enclosing_mbr_ << std::endl;
+    sub_index_last_key_ = serializeMbrExcludeIID(enclosing_mbr_);
     // std::cout << "push_back the last sub_index builder" << std::endl;
     entries_.push_back(
         {serializeMbrExcludeIID(enclosing_mbr_),
@@ -633,12 +655,15 @@ void RtreeSecondaryIndexBuilder::AddIndexEntry(
     // apply flush policy only to non-empty sub_index_builder_
     if (sub_index_builder_ != nullptr) {
       std::string handle_encoding;
-      block_handle.EncodeTo(&handle_encoding);
+      std::string enclosing_mbr_encoding;
+      enclosing_mbr_encoding = serializeMbrExcludeIID(enclosing_mbr_);
+      datablkentry.datablockhandle.EncodeTo(&handle_encoding);
       bool do_flush =
           partition_cut_requested_ ||
-          flush_policy_->Update(*last_key_in_current_block, handle_encoding);
+          flush_policy_->Update(enclosing_mbr_encoding, handle_encoding);
       if (do_flush) {
         // std::cout << "push_back a full sub_index builder" << std::endl;
+        // std::cout << "pushed mbr: " << enclosing_mbr_ << std::endl;
         entries_.push_back(
             {serializeMbrExcludeIID(enclosing_mbr_),
              std::unique_ptr<RtreeSecondaryIndexLevelBuilder>(sub_index_builder_)});
@@ -649,20 +674,163 @@ void RtreeSecondaryIndexBuilder::AddIndexEntry(
     if (sub_index_builder_ == nullptr) {
       MakeNewSubIndexBuilder();
     }
-    sub_index_builder_->AddIndexEntry(block_handle, serializeMbrExcludeIID(sub_index_enclosing_mbr_));
-    sub_index_last_key_ = std::string(*last_key_in_current_block);
+    sub_index_builder_->AddIndexEntry(datablkentry.datablockhandle, datablkentry.subindexenclosingmbr);
+    sub_index_last_key_ = serializeMbrExcludeIID(enclosing_mbr_);
 
   }
-  sub_index_enclosing_mbr_.clear();
 }
+
+
+// void RtreeSecondaryIndexBuilder::AddIndexEntry(
+//     std::string* last_key_in_current_block,
+//     const Slice* first_key_in_next_block, const BlockHandle& block_handle) {
+//   expandMbrExcludeIID(enclosing_mbr_, sub_index_enclosing_mbr_);
+//   // std::cout << "enclosing_mbr_: " << enclosing_mbr_ << std::endl;
+//   // Note: to avoid two consecuitive flush in the same method call, we do not
+//   // check flush policy when adding the last key
+//   if (UNLIKELY(first_key_in_next_block == nullptr)) {  // no more keys
+//     if (sub_index_builder_ == nullptr) {
+//       MakeNewSubIndexBuilder();
+//     }
+//     sub_index_builder_->AddIndexEntry(block_handle, serializeMbrExcludeIID(sub_index_enclosing_mbr_));
+
+//     sub_index_last_key_ = std::string(*last_key_in_current_block);
+//     // std::cout << "push_back the last sub_index builder" << std::endl;
+//     entries_.push_back(
+//         {serializeMbrExcludeIID(enclosing_mbr_),
+//          std::unique_ptr<RtreeSecondaryIndexLevelBuilder>(sub_index_builder_)});
+//     enclosing_mbr_.clear();
+//     sub_index_builder_ = nullptr;
+//     cut_filter_block = true;
+//   } else {
+//     // apply flush policy only to non-empty sub_index_builder_
+//     if (sub_index_builder_ != nullptr) {
+//       std::string handle_encoding;
+//       std::string enclosing_mbr_encoding;
+//       enclosing_mbr_encoding = serializeMbrExcludeIID(enclosing_mbr_);
+//       block_handle.EncodeTo(&handle_encoding);
+//       bool do_flush =
+//           partition_cut_requested_ ||
+//           flush_policy_->Update(enclosing_mbr_encoding, handle_encoding);
+//       if (do_flush) {
+//         // std::cout << "push_back a full sub_index builder" << std::endl;
+//         entries_.push_back(
+//             {serializeMbrExcludeIID(enclosing_mbr_),
+//              std::unique_ptr<RtreeSecondaryIndexLevelBuilder>(sub_index_builder_)});
+//         enclosing_mbr_.clear();
+//         sub_index_builder_ = nullptr;
+//       }
+//     }
+//     if (sub_index_builder_ == nullptr) {
+//       MakeNewSubIndexBuilder();
+//     }
+//     sub_index_builder_->AddIndexEntry(block_handle, serializeMbrExcludeIID(sub_index_enclosing_mbr_));
+//     sub_index_last_key_ = std::string(*last_key_in_current_block);
+
+//   }
+//   sub_index_enclosing_mbr_.clear();
+// }
 
 Status RtreeSecondaryIndexBuilder::Finish(
     IndexBlocks* index_blocks, const BlockHandle& last_partition_block_handle) {
+
+  if (finishing_indexes == false) {
+    
+    data_block_entries_.sort([](const DataBlockEntry& a, const DataBlockEntry& b){
+      Mbr a_mbr = ReadSecQueryMbr(a.subindexenclosingmbr);
+      Mbr b_mbr = ReadSecQueryMbr(b.subindexenclosingmbr);
+
+      // defining z-curve based on grid cells on data space
+      double x_min = -12.2304942;
+      double x_max = 37.4497039;
+      double y_min = 50.0218541;
+      double y_max = 125.9548288;
+      int n = 2048;
+
+      // using the centre point of each mbr for z-value computation
+      double x_a = (a_mbr.first.min + a_mbr.first.max) / 2;
+      double y_a = (a_mbr.second.min + a_mbr.second.max) / 2;
+      double x_b = (b_mbr.first.min + b_mbr.first.max) / 2;
+      double y_b = (b_mbr.second.min + b_mbr.second.max) / 2;
+      // double x_a = a_mbr.first.min;
+      // double y_a = a_mbr.second.min;
+      // double x_b = b_mbr.first.min;
+      // double y_b = b_mbr.second.min;
+
+      // compute the z-values
+      uint32_t x_a_int = std::min(int(floor((x_a - x_min)  / ((x_max - x_min) / n))), n-1);
+      uint32_t y_a_int = std::min(int(floor((y_a - y_min)  / ((y_max - y_min) / n))), n-1);
+      uint32_t x_b_int = std::min(int(floor((x_b - x_min)  / ((x_max - x_min) / n))), n-1);
+      uint32_t y_b_int = std::min(int(floor((y_b - y_min)  / ((y_max - y_min) / n))), n-1);
+
+      // compare the z-values
+      int comp = comp_z_order(x_a_int, y_a_int, x_b_int, y_b_int);
+      return comp <= 0;     
+    });
+    
+    std::list<DataBlockEntry>::iterator it;
+    // int count = 0;
+    // std::cout << "data block entries size: " << data_block_entries_.size() << std::endl;
+    for (it = data_block_entries_.begin(); it != data_block_entries_.end(); ++it) {
+      if (it == --data_block_entries_.end()) {
+        std::cout << "last entry added" << std::endl;
+        // count++;
+        AddIdxEntry(*it, true);
+      } else {
+        AddIdxEntry(*it);
+        // count++;
+      }
+      // AddIdxEntry(*it);
+    }
+    // AddIdxEntry(last_index_entry_, true);
+    // std::cout << "count number: " << count << std::endl;
+    std::cout << "entries_ size: " << entries_.size() << std::endl;
+  }
+  
   if (partition_cnt_ == 0) {
     partition_cnt_ = entries_.size();
   }
   // It must be set to null after last key is added
   // assert(sub_index_builder_ == nullptr);
+
+  // if it is the first call of the finish function,
+  // do the sorting of the entries based on z-value
+  // TODO(Jiachen): other packing method may be developed
+  // if (finishing_indexes == false){
+    // std::cout << "Entries_ size: " << entries_.size() << std::endl;
+    // entries_.sort([](const Entry& a, const Entry& b) {
+    //   // comparator for entries based on z-curve
+    //   Mbr a_mbr = ReadSecQueryMbr(a.key);
+    //   Mbr b_mbr = ReadSecQueryMbr(b.key);
+
+    //   // defining z-curve based on grid cells on data space
+    //   double x_min = -12.2304942;
+    //   double x_max = 37.4497039;
+    //   double y_min = 50.0218541;
+    //   double y_max = 125.9548288;
+    //   // int m = 11;
+    //   int n = 2048;
+
+    //   // using the centre point of each mbr for z-value computation
+    //   double x_a = (a_mbr.first.min + a_mbr.first.max) / 2;
+    //   double y_a = (a_mbr.second.min + a_mbr.second.max) / 2;
+    //   double x_b = (b_mbr.first.min + b_mbr.first.max) / 2;
+    //   double y_b = (b_mbr.second.min + b_mbr.second.max) / 2;
+
+    //   // compute the z-values
+    //   uint32_t x_a_int = std::min(int(floor((x_a - x_min)  / ((x_max - x_min) / n))), n-1);
+    //   uint32_t y_a_int = std::min(int(floor((y_a - y_min)  / ((y_max - y_min) / n))), n-1);
+    //   uint32_t x_b_int = std::min(int(floor((x_b - x_min)  / ((x_max - x_min) / n))), n-1);
+    //   uint32_t y_b_int = std::min(int(floor((y_b - y_min)  / ((y_max - y_min) / n))), n-1);
+
+    //   // compare the z-values
+    //   int comp = comp_z_order(x_a_int, y_a_int, x_b_int, y_b_int);
+    //   return comp <= 0;      
+    // });
+    // std::cout << "entries_ sorted done" << std::endl;
+    // std::cout << "entries size after sorted: " << entries_.size() << std::endl;
+  // }
+
   if (finishing_indexes == true) {
     Entry& last_entry = entries_.front();
     // std::string handle_encoding;
@@ -737,12 +905,12 @@ Status RtreeSecondaryIndexBuilder::Finish(
 
     Entry& entry = entries_.front();
     auto s = entry.value->Finish(index_blocks);
-    // std::cout << "writing an index block to disk with enclosing MBR: " << ReadQueryMbr(entry.key) << std::endl;
+    // std::cout << "writing an index block to disk with enclosing MBR: " << ReadSecQueryMbr(entry.key) << std::endl;
     index_size_ += index_blocks->index_block_contents.size();
     finishing_indexes = true;
 
     next_level_entries_.clear();
-    // std::cout << "swapped next_level_entries and entries_, entries size: " << entries_.size() << std::endl;
+    std::cout << "swapped next_level_entries and entries_, entries size: " << entries_.size() << std::endl;
 
     return Status::Incomplete();
 
@@ -757,7 +925,7 @@ Status RtreeSecondaryIndexBuilder::Finish(
     Entry& entry = entries_.front();
 
     auto s = entry.value->Finish(index_blocks);
-    // std::cout << "writing an index block to disk with enclosing MBR: " << ReadQueryMbr(entry.key) << std::endl;
+    // std::cout << "writing an index block to disk with enclosing MBR: " << ReadSecQueryMbr(entry.key) << std::endl;
     index_size_ += index_blocks->index_block_contents.size();
     finishing_indexes = true;
     return s.ok() ? Status::Incomplete() : s;

@@ -18,7 +18,7 @@
 #include "util/coding.h"
 #include "util/rtree.h"
 #include "util/hilbert_curve.h"
-#include "util/z_curve.h"
+// #include "util/z_curve.h"
 
 
 using namespace rocksdb;
@@ -34,9 +34,9 @@ std::string serialize_key(uint64_t iid, double xValue, double yValue) {
     return key;
 }
 
-std::string serialize_id(int iid) {
+std::string serialize_id(uint64_t iid) {
     std::string key;
-    key.append(reinterpret_cast<const char*>(&iid), sizeof(int));
+    key.append(reinterpret_cast<const char*>(&iid), sizeof(uint64_t));
     return key;
 }
 
@@ -85,6 +85,45 @@ Val deserialize_val(Slice val_slice) {
     return val;
 }
 
+class NoiseComparator : public rocksdb::Comparator {
+public:
+    const char* Name() const {
+        return "rocksdb.NoiseComparator";
+    }
+
+    int Compare(const rocksdb::Slice& const_a, const rocksdb::Slice& const_b) const {
+        Slice slice_a = Slice(const_a);
+        Slice slice_b = Slice(const_b);
+
+        // keypaths are the same, compare the value. The previous
+        // `GetLengthPrefixedSlice()` did advance the Slice already, hence a call
+        // to `.data()` can directly be used.
+        const uint64_t* value_a = reinterpret_cast<const uint64_t*>(slice_a.data());
+        const uint64_t* value_b = reinterpret_cast<const uint64_t*>(slice_b.data());
+
+        // if (*value_a < *value_b) {
+        //     return -1;
+        // } else if (*value_a > *value_b) {
+        //     return 1;
+        // } else {
+        //     return 0;
+        // }
+        // return slice_a.compare(slice_b);
+
+        // // Specifically for R-tree as r-tree does not implement ordering
+        return 1;
+    }
+
+    void FindShortestSeparator(std::string* start,
+                               const rocksdb::Slice& limit) const {
+        return;
+    }
+
+    void FindShortSuccessor(std::string* key) const  {
+        return;
+    }
+};
+
 int main(int argc, char* argv[]) {
 
     std::string kDBPath = argv[1];
@@ -94,6 +133,10 @@ int main(int argc, char* argv[]) {
 
     DB* db;
     Options options;
+
+    // ZComparator4SecondaryIndex cmp;
+    NoiseComparator cmp;
+    options.comparator = &cmp;
 
     options.info_log_level = DEBUG_LEVEL;
     options.statistics = rocksdb::CreateDBStatistics();
@@ -110,9 +153,13 @@ int main(int argc, char* argv[]) {
 
     // Set the block cache to 64 MB
     block_based_options.block_cache = rocksdb::NewLRUCache(64 * 1024 * 1024);
+    // block_based_options.max_auto_readahead_size = 0;
     // block_based_options.index_type = BlockBasedTableOptions::KRtreeSecSearch;
     options.table_factory.reset(NewBlockBasedTableFactory(block_based_options));
     options.memtable_factory.reset(new rocksdb::SkipListSecFactory);
+
+    // options.check_flush_compaction_key_order = false;
+    options.force_consistency_checks = false;
 
     Status s;
     s = DB::Open(options, kDBPath, &db);

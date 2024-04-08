@@ -18,7 +18,7 @@
 #include "util/coding.h"
 #include "util/rtree.h"
 #include "util/hilbert_curve.h"
-#include "util/z_curve.h"
+// #include "util/z_curve.h"
 
 
 using namespace rocksdb;
@@ -93,16 +93,17 @@ public:
         // keypaths are the same, compare the value. The previous
         // `GetLengthPrefixedSlice()` did advance the Slice already, hence a call
         // to `.data()` can directly be used.
-        const uint64_t* value_a = reinterpret_cast<const uint64_t*>(slice_a.data());
-        const uint64_t* value_b = reinterpret_cast<const uint64_t*>(slice_b.data());
+        const int* value_a = reinterpret_cast<const int*>(slice_a.data());
+        const int* value_b = reinterpret_cast<const int*>(slice_b.data());
 
-        if (*value_a < *value_b) {
-            return -1;
-        } else if (*value_a > *value_b) {
-            return 1;
-        } else {
-            return 0;
-        }
+        // if (*value_a < *value_b) {
+        //     return -1;
+        // } else if (*value_a > *value_b) {
+        //     return 1;
+        // } else {
+        //     return 0;
+        // }
+        return slice_a.compare(slice_b);
 
         // // Specifically for R-tree as r-tree does not implement ordering
         // return 1;
@@ -129,10 +130,10 @@ int main(int argc, char* argv[]) {
     DB* db;
     Options options;
 
+    // ZComparator4SecondaryIndex cmp;
     // ZComparator cmp;
-    // ZComparator cmp;
-    // NoiseComparator cmp;
-    // options.comparator = &cmp;
+    NoiseComparator cmp;
+    options.comparator = &cmp;
 
     options.info_log_level = DEBUG_LEVEL;
     // options.statistics = rocksdb::CreateDBStatistics();
@@ -228,7 +229,7 @@ int main(int argc, char* argv[]) {
         std::cout << "end writing data" << std::endl;
         std::cout << "Execution time: " << totalDuration.count() << " nanoseconds" << std::endl;
 
-        sleep(300);
+        sleep(90);
         // std::string stats_value;
         // db->GetProperty("rocksdb.stats", &stats_value);
         // std::cout << stats_value << std::endl;

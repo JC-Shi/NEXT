@@ -684,7 +684,7 @@ bool DataBlockIter::ParseNextSecSpatialDataKey(bool* is_shared) {
   do {
     ret = ParseNextDataKey(is_shared);
     UpdateKey();
-    // std::cout << "parsed first sec spatial key" << std::endl;
+    // std::cout << "parsed sec spatial key" << std::endl;
   } while (Valid() && !IntersectMbrExlucdeIID(value(), query_mbr_));
   return ret;
 }
@@ -1265,7 +1265,7 @@ RtreeBlockIter* Block::NewRtreeIterator(const Comparator* raw_ucmp,
                                         Statistics* stats,
                                         bool block_contents_pinned,
                                         RtreeIteratorContext* context) {
-  // std::cout << "creating new rtree iterator" << std::endl;
+  std::cout << "creating new rtree iterator" << std::endl;
   RtreeBlockIter* ret_iter;
   if (iter != nullptr) {
     ret_iter = iter;
