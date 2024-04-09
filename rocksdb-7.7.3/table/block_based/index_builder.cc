@@ -91,13 +91,11 @@ SecondaryIndexBuilder* SecondaryIndexBuilder::CreateSecIndexBuilder(
     const bool use_value_delta_encoding,
     const BlockBasedTableOptions& table_opt) {
   (void) int_key_slice_transform;
-  (void) comparator;
   SecondaryIndexBuilder* result = nullptr;
   switch (sec_index_type) {
     case BlockBasedTableOptions::kRtreeSec: {
-      ZComparator4SecondaryIndex cmp4sec;
       result =RtreeSecondaryIndexBuilder::CreateIndexBuilder(
-          &cmp4sec, use_value_delta_encoding, table_opt);
+          comparator, use_value_delta_encoding, table_opt);
       break;
     }
     default: {
@@ -564,8 +562,7 @@ size_t RtreeIndexBuilder::NumPartitions() const { return partition_cnt_; }
 // }
 
 RtreeSecondaryIndexBuilder* RtreeSecondaryIndexBuilder::CreateIndexBuilder(
-    // const InternalKeyComparator* comparator,
-    const Comparator* comparator,
+    const InternalKeyComparator* comparator,
     const bool use_value_delta_encoding,
     const BlockBasedTableOptions& table_opt) {
   return new RtreeSecondaryIndexBuilder(comparator, table_opt,
@@ -573,8 +570,7 @@ RtreeSecondaryIndexBuilder* RtreeSecondaryIndexBuilder::CreateIndexBuilder(
 }
 
 RtreeSecondaryIndexBuilder::RtreeSecondaryIndexBuilder(
-    // const InternalKeyComparator* comparator,
-    const Comparator* comparator,
+    const InternalKeyComparator* comparator,
     const BlockBasedTableOptions& table_opt,
     const bool use_value_delta_encoding)
     : SecondaryIndexBuilder(comparator),

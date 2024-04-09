@@ -168,20 +168,20 @@ InternalIteratorBase<IndexValue>* RtreeSecIndexReader::NewIterator(
 
     // We don't return pinned data from index blocks, so no need
     // to set `block_contents_pinned`.
-    ZComparator4SecondaryIndex cmp;
-    std::unique_ptr<InternalIteratorBase<IndexValue>> index_iter(
-        index_block.GetValue()->NewIndexIterator(
-            &cmp,
-            rep->get_global_seqno(BlockType::kIndex), nullptr, kNullStats, true,
-            index_has_first_key(), index_key_includes_seq(),
-            index_value_is_full()));
-    // std::cout << "three bools: " << index_has_first_key() << "; " << index_key_includes_seq() << "; " << index_value_is_full() << std::endl;
+    // ZComparator4SecondaryIndex cmp;
     // std::unique_ptr<InternalIteratorBase<IndexValue>> index_iter(
     //     index_block.GetValue()->NewIndexIterator(
-    //         internal_comparator()->user_comparator(),
+    //         &cmp,
     //         rep->get_global_seqno(BlockType::kIndex), nullptr, kNullStats, true,
     //         index_has_first_key(), index_key_includes_seq(),
     //         index_value_is_full()));
+    // std::cout << "three bools: " << index_has_first_key() << "; " << index_key_includes_seq() << "; " << index_value_is_full() << std::endl;
+    std::unique_ptr<InternalIteratorBase<IndexValue>> index_iter(
+        index_block.GetValue()->NewIndexIterator(
+            internal_comparator()->user_comparator(),
+            rep->get_global_seqno(BlockType::kIndex), nullptr, kNullStats, true,
+            index_has_first_key(), index_key_includes_seq(),
+            index_value_is_full()));
 
     // std::cout << "rtree_index_reader rtree_height_: " << rtree_height_ << std::endl;
 

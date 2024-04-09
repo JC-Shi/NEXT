@@ -34,9 +34,9 @@ std::string serialize_key(uint64_t iid, double xValue, double yValue) {
     return key;
 }
 
-std::string serialize_id(uint64_t iid) {
+std::string serialize_id(int iid) {
     std::string key;
-    key.append(reinterpret_cast<const char*>(&iid), sizeof(uint64_t));
+    key.append(reinterpret_cast<const char*>(&iid), sizeof(int));
     return key;
 }
 
@@ -98,8 +98,8 @@ public:
         // keypaths are the same, compare the value. The previous
         // `GetLengthPrefixedSlice()` did advance the Slice already, hence a call
         // to `.data()` can directly be used.
-        const uint64_t* value_a = reinterpret_cast<const uint64_t*>(slice_a.data());
-        const uint64_t* value_b = reinterpret_cast<const uint64_t*>(slice_b.data());
+        const int* value_a = reinterpret_cast<const int*>(slice_a.data());
+        const int* value_b = reinterpret_cast<const int*>(slice_b.data());
 
         // if (*value_a < *value_b) {
         //     return -1;
@@ -108,6 +108,7 @@ public:
         // } else {
         //     return 0;
         // }
+
         // return slice_a.compare(slice_b);
 
         // // Specifically for R-tree as r-tree does not implement ordering
