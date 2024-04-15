@@ -299,6 +299,8 @@ class BlockBasedTable : public TableReader {
 
   friend class RtreeSecIndexReader;
 
+  friend class OneDRtreeSecIndexReader;
+
   friend class UncompressionDictReader;
 
  protected:
@@ -351,6 +353,14 @@ class BlockBasedTable : public TableReader {
 
   template <typename TBlockIter>
   static TBlockIter* InitBlockIterator(bool is_secondary_index_scan, const Rep* rep, Block* block,
+                                       BlockType block_type,
+                                       TBlockIter* input_iter,
+                                       bool block_contents_pinned,
+                                       RtreeIteratorContext* iterator_context);
+
+  template <typename TBlockIter>
+  static TBlockIter* InitBlockIterator(bool is_secondary_index_scan, bool is_secondary_index_spatial, 
+                                       const Rep* rep, Block* block,
                                        BlockType block_type,
                                        TBlockIter* input_iter,
                                        bool block_contents_pinned,
@@ -475,7 +485,7 @@ class BlockBasedTable : public TableReader {
                            BlockCacheLookupContext* lookup_context,
                            std::unique_ptr<IndexReader>* index_reader);
 
-  Status CreateSecIndexReader(const ReadOptions& ro,
+  Status CreateSecIndexReader(const ReadOptions& ro, bool is_sec_index_spatial,
                            FilePrefetchBuffer* prefetch_buffer,
                            InternalIterator* preloaded_meta_index_iter,
                            bool use_cache, bool prefetch, bool pin,

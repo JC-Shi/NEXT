@@ -243,6 +243,7 @@ struct BlockBasedTableOptions {
     // Secondary index type
     // R-tree secondary index for geographic coordinates (2D)
     kRtreeSec = 0x00,
+    kOneDRtreeSec = 0x01, // One-Dimentional Rtree for numerical data (1D)
   };
   SecondaryIndexType sec_index_type = kRtreeSec;
 

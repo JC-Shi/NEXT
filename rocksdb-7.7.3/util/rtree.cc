@@ -72,6 +72,40 @@ namespace rocksdb {
         return true;
     }
 
+    bool IntersectValRangePoint(ValueRange aa,
+                      double bb) {
+        // If a bounding region is empty, return true
+        // if aa or bb is empty, then may indicate full table scan
+        if (aa.empty()) {
+            return true;
+        }
+
+        // If the bounding regions don't intersect in one dimension, they won't
+        // intersect at all, hence we can return early
+        if (aa.range.min > bb || bb > aa.range.max) {
+            return false;
+        }
+
+        return true;
+    }
+
+    bool IntersectValRange(ValueRange aa,
+                          ValueRange bb) {
+        // If a bounding region is empty, return true
+        // if aa or bb is empty, then may indicate full table scan
+        if (aa.empty() || bb.empty()) {
+            return true;
+        }
+
+        // If the bounding regions don't intersect in one dimension, they won't
+        // intersect at all, hence we can return early
+        if (aa.range.min > bb.range.max || bb.range.min > aa.range.max) {
+            return false;
+        }
+
+        return true;
+    }
+
     void ReadMbrValues(Mbr& mbr, Slice& data) {
         double min = *reinterpret_cast<const double*>(data.data());
         double max = *reinterpret_cast<const double*>(data.data() + 8);
@@ -116,6 +150,23 @@ namespace rocksdb {
         ReadMbrValues(mbr, data);
         return mbr;
     }   
+
+    ValueRange ReadValueRange(Slice data) {
+        ValueRange valrange;
+        double min = *reinterpret_cast<const double*>(data.data());
+        double max = *reinterpret_cast<const double*>(data.data() + 8); 
+        valrange.set_range(min, max);
+        return valrange;      
+    }
+
+    std::string serializeValueRange(const ValueRange& valrange) {
+        std::string serialized;
+        serialized.append(reinterpret_cast<const char*>(&valrange.range.min),
+                        sizeof(double));
+        serialized.append(reinterpret_cast<const char*>(&valrange.range.max),
+                        sizeof(double));
+        return serialized;
+    }
 
     std::string serializeMbrExcludeIID(const Mbr& mbr) {
         std::string serialized;
@@ -189,7 +240,33 @@ namespace rocksdb {
                 to_expand.second.max = expander.second.max;
             }
         }
-  }
+    }
+
+    void expandSecValueRangeP(ValueRange& to_expand, double expander) {
+        if (to_expand.empty()) {
+            to_expand.set_range(expander, expander);
+        } else {
+            if (expander < to_expand.range.min) {
+                to_expand.range.min = expander;
+            }
+            if (expander > to_expand.range.max) {
+                to_expand.range.max = expander;
+            }
+        }
+    }
+
+    void expandSecValueRange(ValueRange& to_expand, ValueRange expander) {
+        if (to_expand.empty()) {
+            to_expand = expander;
+        } else {
+            if (expander.range.min < to_expand.range.min) {
+                to_expand.range.min = expander.range.min;
+            }
+            if (expander.range.max > to_expand.range.max) {
+                to_expand.range.max = expander.range.max;
+            }
+        }
+    }
 
   bool GlobalRTreeCallback(std::pair<int, uint64_t> index_data) {
     // nothing to do yet

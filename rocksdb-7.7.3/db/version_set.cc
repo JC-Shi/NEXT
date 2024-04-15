@@ -1949,14 +1949,16 @@ void Version::AddIteratorsForLevel(const ReadOptions& read_options,
     RtreeIteratorContext* context = 
         reinterpret_cast<RtreeIteratorContext*>(read_options.iterator_context);
     Slice query_slice(context->query_mbr);
-    Mbr query_mbr = ReadSecQueryMbr(query_slice);
-
-    // getting the indexed data from the global secondary index
-    // based on the query range
-    Rect query_rect(query_mbr.first.min, query_mbr.second.min, query_mbr.first.max, query_mbr.second.max);
     std::vector<std::pair<int, uint64_t>> hittedFiles;
-    // std::cout << "query_rect: " << query_rect.min[0] << query_rect.max[0] << std::endl; 
-    hittedFiles = global_rtree_.Search(query_rect.min, query_rect.max, GlobalRTreeCallback);
+    if (mutable_cf_options_.global_sec_index_is_spatial) {
+      Mbr query_mbr = ReadSecQueryMbr(query_slice);
+      Rect query_rect(query_mbr.first.min, query_mbr.second.min, query_mbr.first.max, query_mbr.second.max);
+      hittedFiles = global_rtree_.Search(query_rect.min, query_rect.max, GlobalRTreeCallback);
+    } else {
+      ValueRange query_valrange = ReadValueRange(query_slice);
+      Rect1D query_rect1D(query_valrange.range.min, query_valrange.range.max);
+      hittedFiles = global_rtree_.Search(query_rect1D.min, query_rect1D.max, GlobalRTreeCallback);
+    }
 
     // iterating through the return vector
     // find the level and position of each file and 

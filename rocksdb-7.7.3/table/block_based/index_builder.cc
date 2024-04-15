@@ -94,8 +94,13 @@ SecondaryIndexBuilder* SecondaryIndexBuilder::CreateSecIndexBuilder(
   SecondaryIndexBuilder* result = nullptr;
   switch (sec_index_type) {
     case BlockBasedTableOptions::kRtreeSec: {
-      result =RtreeSecondaryIndexBuilder::CreateIndexBuilder(
+      result = RtreeSecondaryIndexBuilder::CreateIndexBuilder(
           comparator, use_value_delta_encoding, table_opt);
+      break;
+    }
+    case BlockBasedTableOptions::kOneDRtreeSec: {
+      result = OneDRtreeSecondaryIndexBuilder::CreateIndexBuilder(
+         comparator, use_value_delta_encoding, table_opt);
       break;
     }
     default: {
@@ -931,5 +936,243 @@ Status RtreeSecondaryIndexBuilder::Finish(
 size_t RtreeSecondaryIndexBuilder::NumPartitions() const { return partition_cnt_; }
 
 
+OneDRtreeSecondaryIndexBuilder* OneDRtreeSecondaryIndexBuilder::CreateIndexBuilder(
+    const InternalKeyComparator* comparator,
+    const bool use_value_delta_encoding,
+    const BlockBasedTableOptions& table_opt) {
+  return new OneDRtreeSecondaryIndexBuilder(comparator, table_opt,
+                                     use_value_delta_encoding);
+}
+
+OneDRtreeSecondaryIndexBuilder::OneDRtreeSecondaryIndexBuilder(
+    const InternalKeyComparator* comparator,
+    const BlockBasedTableOptions& table_opt,
+    const bool use_value_delta_encoding)
+    : SecondaryIndexBuilder(comparator),
+      index_block_builder_(table_opt.index_block_restart_interval,
+                           true /*use_delta_encoding*/,
+                           use_value_delta_encoding),
+      sub_index_builder_(nullptr),
+      table_opt_(table_opt),
+      use_value_delta_encoding_(use_value_delta_encoding),
+      rtree_level_(1) {}
+
+OneDRtreeSecondaryIndexBuilder::~OneDRtreeSecondaryIndexBuilder() {
+  delete sub_index_builder_;
+}
+
+void OneDRtreeSecondaryIndexBuilder::MakeNewSubIndexBuilder() {
+  assert(sub_index_builder_ == nullptr);
+  sub_index_builder_ = new OneDRtreeSecondaryIndexLevelBuilder(
+      comparator_, table_opt_.index_block_restart_interval,
+      table_opt_.format_version, use_value_delta_encoding_,
+      table_opt_.index_shortening, /* include_first_key */ false);
+
+  flush_policy_.reset(FlushBlockBySizePolicyFactory::NewFlushBlockPolicy(
+      table_opt_.metadata_block_size, table_opt_.block_size_deviation,
+      sub_index_builder_->index_block_builder_));
+  partition_cut_requested_ = false;
+}
+
+void OneDRtreeSecondaryIndexBuilder::RequestPartitionCut() {
+  partition_cut_requested_ = true;
+}
+
+void OneDRtreeSecondaryIndexBuilder::OnKeyAdded(const Slice& value){
+    Slice val_temp = Slice(value);
+    double numerical_val = *reinterpret_cast<const double*>(val_temp.data());
+    ValueRange temp_val_range;
+    temp_val_range.set_range(numerical_val, numerical_val);
+    expandValrange(sub_index_enclosing_valrange_, temp_val_range);
+  }
+
+void OneDRtreeSecondaryIndexBuilder::AddIndexEntry(
+    std::string* last_key_in_current_block,
+    const Slice* first_key_in_next_block, const BlockHandle& block_handle) {
+  (void) first_key_in_next_block;
+  DataBlockEntry dbe;
+  dbe.datablockhandle = block_handle;
+  dbe.datablocklastkey = std::string(*last_key_in_current_block);
+  dbe.subindexenclosingvalrange = serializeValueRange(sub_index_enclosing_valrange_);
+  data_block_entries_.push_back(dbe);
+  sub_index_enclosing_valrange_.clear();    
+}
+
+void OneDRtreeSecondaryIndexBuilder::AddIdxEntry(DataBlockEntry datablkentry, bool last) {
+  expandValrange(enclosing_valrange_, ReadValueRange(datablkentry.subindexenclosingvalrange));
+  // std::cout << "enclosing_mbr_: " << enclosing_mbr_ << std::endl;
+  // Note: to avoid two consecuitive flush in the same method call, we do not
+  // check flush policy when adding the last key
+  if (UNLIKELY(last == true)) {  // no more keys
+    if (sub_index_builder_ == nullptr) {
+      MakeNewSubIndexBuilder();
+    }
+    sub_index_builder_->AddIndexEntry(datablkentry.datablockhandle, datablkentry.subindexenclosingvalrange);
+
+    sub_index_last_key_ = serializeValueRange(enclosing_valrange_);
+    entries_.push_back(
+        {serializeValueRange(enclosing_valrange_),
+         std::unique_ptr<OneDRtreeSecondaryIndexLevelBuilder>(sub_index_builder_)});
+    enclosing_valrange_.clear();
+    sub_index_builder_ = nullptr;
+    cut_filter_block = true;
+  } else {
+    // apply flush policy only to non-empty sub_index_builder_
+    if (sub_index_builder_ != nullptr) {
+      std::string handle_encoding;
+      std::string enclosing_valrange_encoding;
+      enclosing_valrange_encoding = serializeValueRange(enclosing_valrange_);
+      datablkentry.datablockhandle.EncodeTo(&handle_encoding);
+      bool do_flush =
+          partition_cut_requested_ ||
+          flush_policy_->Update(enclosing_valrange_encoding, handle_encoding);
+      if (do_flush) {
+        // std::cout << "push_back a full sub_index builder" << std::endl;
+        // std::cout << "pushed mbr: " << enclosing_mbr_ << std::endl;
+        entries_.push_back(
+            {serializeValueRange(enclosing_valrange_),
+             std::unique_ptr<OneDRtreeSecondaryIndexLevelBuilder>(sub_index_builder_)});
+        enclosing_valrange_.clear();
+        sub_index_builder_ = nullptr;
+      }
+    }
+    if (sub_index_builder_ == nullptr) {
+      MakeNewSubIndexBuilder();
+    }
+    sub_index_builder_->AddIndexEntry(datablkentry.datablockhandle, datablkentry.subindexenclosingvalrange);
+    sub_index_last_key_ = serializeValueRange(enclosing_valrange_);
+
+  }
+}
+
+Status OneDRtreeSecondaryIndexBuilder::Finish(
+    IndexBlocks* index_blocks, const BlockHandle& last_partition_block_handle) {
+
+  if (finishing_indexes == false) {
+    
+    data_block_entries_.sort([](const DataBlockEntry& a, const DataBlockEntry& b){
+      ValueRange a_valrange = ReadValueRange(a.subindexenclosingvalrange);
+      ValueRange b_valrange = ReadValueRange(b.subindexenclosingvalrange);
+
+      // using the centre point of each interval for comparison
+      double c_a = (a_valrange.range.min + a_valrange.range.max) / 2;
+      double c_b = (b_valrange.range.min + b_valrange.range.max) / 2;
+
+      return c_a <= c_b;     
+    });
+    
+    std::list<DataBlockEntry>::iterator it;
+    // int count = 0;
+    // std::cout << "data block entries size: " << data_block_entries_.size() << std::endl;
+    for (it = data_block_entries_.begin(); it != data_block_entries_.end(); ++it) {
+      if (it == --data_block_entries_.end()) {
+        std::cout << "last entry added" << std::endl;
+        // count++;
+        AddIdxEntry(*it, true);
+      } else {
+        AddIdxEntry(*it);
+        // count++;
+      }
+      // AddIdxEntry(*it);
+    }
+    // AddIdxEntry(last_index_entry_, true);
+    // std::cout << "count number: " << count << std::endl;
+    std::cout << "entries_ size: " << entries_.size() << std::endl;
+  }
+  
+  if (partition_cnt_ == 0) {
+    partition_cnt_ = entries_.size();
+  }
+
+  if (finishing_indexes == true) {
+    Entry& last_entry = entries_.front();
+
+    if (sub_index_builder_ != nullptr) {
+      std::string handle_encoding;
+      last_partition_block_handle.EncodeTo(&handle_encoding);
+      bool do_flush =
+          partition_cut_requested_ ||
+          flush_policy_->Update(last_entry.key, handle_encoding);
+      if (do_flush) {
+        // std::cout << "enclosing_mbr: " << enclosing_mbr_ << std::endl;
+        next_level_entries_.push_back(
+            {serializeValueRange(enclosing_valrange_),
+             std::unique_ptr<OneDRtreeSecondaryIndexLevelBuilder>(sub_index_builder_)});
+        enclosing_valrange_.clear();
+        sub_index_builder_ = nullptr;
+      }
+    }
+    if (sub_index_builder_ == nullptr) {
+      MakeNewSubIndexBuilder();
+    }
+    sub_index_builder_->AddIndexEntry(last_partition_block_handle, last_entry.key);
+    expandValrange(enclosing_valrange_, ReadValueRange(last_entry.key));
+
+    entries_.pop_front();
+  }
+  // If the current R-tree level has been constructed, move on to the next level.
+  if (UNLIKELY(entries_.empty())) {
+
+    // update R-tree height
+    rtree_level_++;
+
+    if (sub_index_builder_ != nullptr){
+      next_level_entries_.push_back(
+          {serializeValueRange(enclosing_valrange_),
+          std::unique_ptr<OneDRtreeSecondaryIndexLevelBuilder>(sub_index_builder_)});
+      enclosing_valrange_.clear();
+      sub_index_builder_ = nullptr;
+    }
+
+    // return if current level only contains one block
+    // std::cout << "next_level_entries_ size: " << next_level_entries_.size() << std::endl;
+    if (next_level_entries_.size() == 1) {
+      Entry& entry = next_level_entries_.front();
+      auto s = entry.value->Finish(index_blocks);
+      // std::cout << "writing the top-level index block with enclosing MBR: " << ReadQueryMbr(entry.key) << std::endl;
+      index_size_ += index_blocks->index_block_contents.size();
+      PutVarint32(&rtree_height_str_, rtree_level_);
+      index_blocks->meta_blocks.insert(
+        {kRtreeSecondaryIndexMetadataBlock.c_str(), rtree_height_str_});
+      // std::cout << "R-tree height: " << rtree_level_ << std::endl;
+      return s;
+    }
+
+    // swaping the contents of entries_ and next_level_entries
+    for (std::list<Entry>::iterator it = next_level_entries_.begin(), end = next_level_entries_.end(); it != end; ++it) {
+      entries_.push_back({it->key, std::move(it->value)});
+      // std::cout << "add new item to entries: " << ReadQueryMbr(it->key) << std::endl;
+    }
+
+    Entry& entry = entries_.front();
+    auto s = entry.value->Finish(index_blocks);
+    // std::cout << "writing an index block to disk with enclosing MBR: " << ReadSecQueryMbr(entry.key) << std::endl;
+    index_size_ += index_blocks->index_block_contents.size();
+    finishing_indexes = true;
+
+    next_level_entries_.clear();
+    std::cout << "swapped next_level_entries and entries_, entries size: " << entries_.size() << std::endl;
+
+    return Status::Incomplete();
+
+    // index_blocks->index_block_contents = index_block_builder_.Finish();
+
+    // top_level_index_size_ = index_blocks->index_block_contents.size();
+    // index_size_ += top_level_index_size_;
+    // return Status::OK();
+  } else {
+    // Finish the next partition index in line and Incomplete() to indicate we
+    // expect more calls to Finish
+    Entry& entry = entries_.front();
+
+    auto s = entry.value->Finish(index_blocks);
+    // std::cout << "writing an index block to disk with enclosing MBR: " << ReadSecQueryMbr(entry.key) << std::endl;
+    index_size_ += index_blocks->index_block_contents.size();
+    finishing_indexes = true;
+    return s.ok() ? Status::Incomplete() : s;
+  }
+}
+
+size_t OneDRtreeSecondaryIndexBuilder::NumPartitions() const { return partition_cnt_; }
 
 }  // namespace ROCKSDB_NAMESPACE

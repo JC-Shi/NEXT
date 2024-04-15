@@ -1386,7 +1386,7 @@ void BlockBasedTableBuilder::BGWorkWriteRawBlock() {
     if (block_rep->first_key_in_next_block == nullptr) {
       r->index_builder->AddIndexEntry(&(block_rep->keys->Back()), nullptr,
                                       r->pending_handle);
-      if (r->table_options.create_sec_index_reader) {
+      if (r->table_options.create_secondary_index) {
         r->sec_index_builder->AddIndexEntry(&(block_rep->keys->Back()), nullptr,
                                         r->pending_handle);
       }
@@ -1396,7 +1396,7 @@ void BlockBasedTableBuilder::BGWorkWriteRawBlock() {
       r->index_builder->AddIndexEntry(&(block_rep->keys->Back()),
                                       &first_key_in_next_block,
                                       r->pending_handle);
-      if (r->table_options.create_sec_index_reader) {
+      if (r->table_options.create_secondary_index) {
         r->sec_index_builder->AddIndexEntry(&(block_rep->keys->Back()),
                                       &first_key_in_next_block,
                                       r->pending_handle);
@@ -2104,7 +2104,7 @@ Status BlockBasedTableBuilder::Finish() {
     if (ok() && !empty_data_block) {
       r->index_builder->AddIndexEntry(
           &r->last_key, nullptr /* no next data block */, r->pending_handle);
-          if (r->table_options.create_sec_index_reader) {
+          if (r->table_options.create_secondary_index) {
             r->sec_index_builder->AddIndexEntry(&r->last_key, nullptr /* no next data block */, r->pending_handle);
           }
     }

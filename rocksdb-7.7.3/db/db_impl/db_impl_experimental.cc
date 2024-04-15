@@ -138,7 +138,7 @@ Status DBImpl::PromoteL0(ColumnFamilyHandle* column_family, int target_level) {
                    f->marked_for_compaction, f->temperature,
                    f->oldest_blob_file_number, f->oldest_ancester_time,
                    f->file_creation_time, f->file_checksum,
-                   f->file_checksum_func_name, f->unique_id, f->mbr, f->sketch);
+                   f->file_checksum_func_name, f->unique_id, f->mbr, f->sketch, f->valrange);
     }
 
     status = versions_->LogAndApply(cfd, *cfd->GetLatestMutableCFOptions(),

@@ -60,6 +60,7 @@
 #include "table/block_based/partitioned_index_reader.h"
 #include "table/block_based/rtree_index_reader.h"
 #include "table/block_based/rtree_sec_index_reader.h"
+#include "table/block_based/onedrtree_sec_index_reader.h"
 #include "table/block_fetcher.h"
 #include "table/format.h"
 #include "table/get_context.h"
@@ -1144,7 +1145,11 @@ Status BlockBasedTable::PrefetchIndexAndFilterBlocks(
   // to prevent contentionn with pk index reader, a separated reader is needed
   if (table_options.create_sec_index_reader) {
     std::unique_ptr<IndexReader> sec_index_reader;
-    s = new_table->CreateSecIndexReader(ro, prefetch_buffer, meta_iter, use_cache,
+    bool is_sec_index_spatial = true;
+    if(table_options.sec_index_type == BlockBasedTableOptions::kOneDRtreeSec) {
+      is_sec_index_spatial = false;
+    }
+    s = new_table->CreateSecIndexReader(ro, is_sec_index_spatial, prefetch_buffer, meta_iter, use_cache,
                                     prefetch_index, pin_index, lookup_context,
                                     &sec_index_reader);
 
@@ -1619,6 +1624,17 @@ DataBlockIter* BlockBasedTable::InitBlockIterator<DataBlockIter>(
                                 is_secondary_index_scan);
 }
 
+template <>
+DataBlockIter* BlockBasedTable::InitBlockIterator<DataBlockIter>(
+    bool is_secondary_index_scan, bool is_secondary_index_spatial,
+    const Rep* rep, Block* block, BlockType block_type,
+    DataBlockIter* input_iter, bool block_contents_pinned, RtreeIteratorContext* iterator_context) {
+  return block->NewSecondaryIndexDataIterator1D(rep->internal_comparator.user_comparator(),
+                                rep->get_global_seqno(block_type), input_iter,
+                                rep->ioptions.stats, block_contents_pinned, iterator_context,
+                                is_secondary_index_scan, is_secondary_index_spatial);
+}
+
 // template <>
 // RtreeBlockIter* BlockBasedTable::InitBlockIterator(
 //     const Rep* rep, Block* block, BlockType block_type,
@@ -1629,6 +1645,23 @@ DataBlockIter* BlockBasedTable::InitBlockIterator<DataBlockIter>(
 //                                 rep->get_global_seqno(block_type), rtree_input_iter,
 //                                 rep->ioptions.stats, block_contents_pinned, iterator_context);
 // }
+
+template <>
+IndexBlockIter* BlockBasedTable::InitBlockIterator<IndexBlockIter>(
+    bool is_secondary_index_scan, bool is_secondary_index_spatial, 
+    const Rep* rep, Block* block, BlockType block_type,
+    IndexBlockIter* input_iter, bool block_contents_pinned, 
+    RtreeIteratorContext* iterator_context) {
+  (void)is_secondary_index_scan;
+  (void)iterator_context;
+  (void)is_secondary_index_spatial;
+  return block->NewIndexIterator(
+      rep->internal_comparator.user_comparator(),
+      rep->get_global_seqno(block_type), input_iter, rep->ioptions.stats,
+      /* total_order_seek */ true, rep->index_has_first_key,
+      rep->index_key_includes_seq, rep->index_value_is_full,
+      block_contents_pinned);
+}
 
 template <>
 IndexBlockIter* BlockBasedTable::InitBlockIterator<IndexBlockIter>(
@@ -2777,15 +2810,23 @@ Status BlockBasedTable::CreateIndexReader(
 }
 
 Status BlockBasedTable::CreateSecIndexReader(
-    const ReadOptions& ro, FilePrefetchBuffer* prefetch_buffer,
+    const ReadOptions& ro, bool is_sec_index_spatial,
+    FilePrefetchBuffer* prefetch_buffer,
     InternalIterator* meta_iter, bool use_cache, bool prefetch, bool pin,
     BlockCacheLookupContext* lookup_context,
     std::unique_ptr<IndexReader>* sec_index_reader) {
   std::cout << "start CreateSecIndexReader"  << std::endl;
 
-  return RtreeSecIndexReader::Create(this, ro, prefetch_buffer, meta_iter,
-                                        use_cache, prefetch, pin, lookup_context,
-                                        sec_index_reader);
+  if (is_sec_index_spatial) {
+    return RtreeSecIndexReader::Create(this, ro, prefetch_buffer, meta_iter,
+                                          use_cache, prefetch, pin, lookup_context,
+                                          sec_index_reader);    
+  } else {
+    // std::cout << "create onedrtreesecindexreader" << std::endl;
+    return OneDRtreeSecIndexReader::Create(this, ro, prefetch_buffer, meta_iter,
+                                          use_cache, prefetch, pin, lookup_context,
+                                          sec_index_reader); 
+  }
 
 }
 

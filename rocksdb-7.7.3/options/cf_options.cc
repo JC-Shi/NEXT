@@ -906,7 +906,8 @@ ImmutableCFOptions::ImmutableCFOptions(const ColumnFamilyOptions& cf_options)
       sst_partitioner_factory(cf_options.sst_partitioner_factory),
       blob_cache(cf_options.blob_cache),
       global_sec_index(cf_options.create_global_sec_index),
-      global_index_loc(cf_options.global_sec_index_loc) {}
+      global_index_loc(cf_options.global_sec_index_loc),
+      global_sec_index_is_spatial(cf_options.global_sec_index_is_spatial) {}
 
 ImmutableOptions::ImmutableOptions() : ImmutableOptions(Options()) {}
 

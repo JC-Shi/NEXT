@@ -450,15 +450,28 @@ class SkipListSecRep : public SkipListRep {
                 IteratorContext* iterator_context)
                 : SkipListRep::Iterator(list) {
             if (iterator_context != nullptr){
-                // TODO_JC: different types of secondary attributes' query context
-                // TODO_JC: Options shall be added here              
+          
                 RtreeIteratorContext* context =
                     reinterpret_cast<RtreeIteratorContext*>(iterator_context);
                 Slice query_slice = Slice(context->query_mbr);
+
+                // TODO(Jiachen): auto change type of secondary query attribute
+                // Futurework: options for different sec value type
+                // Current solution: based on the size of the query slice
+                // if query_slice.size == 16: one-d value range
+                // if query_slice.size == 32: two-d mbr
+                std::cout << "query slice size: " << query_slice.size() << std::endl;
+                if (query_slice.size() == 16) {
+                  std::cout << "query range initialized" << std::endl;
+                  query_valrange_ = ReadValueRange(query_slice);
+                } else {
+                  query_mbr_ = ReadSecQueryMbr(query_slice);
+                }
+
                 // Slice keypath_slice;
                 // GetLengthPrefixedSlice(&query_slice, &keypath_slice);
                 // query_keypath_ = keypath_slice.ToString();
-                query_mbr_ = ReadSecQueryMbr(query_slice);
+                // query_mbr_ = ReadSecQueryMbr(query_slice);
             }
         }
 
@@ -476,8 +489,9 @@ class SkipListSecRep : public SkipListRep {
 
       private:
         // The querying minimum bounding region
-        // TODO_JC: differnt query context (mbr assuming secondary attribure is spatial)
+        
         Mbr query_mbr_;
+        ValueRange query_valrange_;
 
         // The NextIfDisjoint skip key if it does not intersect with the query mbr
         void NextIfDisjoint() {
@@ -486,10 +500,16 @@ class SkipListSecRep : public SkipListRep {
             // If value is not intersected or equal, skip
             Slice internal_key_slice = GetLengthPrefixedSlice(key());
             Slice val_slice = GetLengthPrefixedSlice(internal_key_slice.data() + internal_key_slice.size());
-            // TODO_JC: different types of secondary attributes need different condition checking
-            Mbr mbr = ReadValueMbr(val_slice);
-            if (!IntersectMbrExcludeIID(mbr, query_mbr_)) {
-              Next();
+            if (!query_valrange_.empty()) {             
+              Mbr mbr = ReadValueMbr(val_slice);
+              if (!IntersectMbrExcludeIID(mbr, query_mbr_)) {
+                Next();
+              }
+            } else {
+              double val_num = *reinterpret_cast<const double*>(val_slice.data());
+              if (!IntersectValRangePoint(query_valrange_, val_num)) {
+                Next();
+              }
             }
           }  
         }

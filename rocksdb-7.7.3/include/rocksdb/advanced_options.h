@@ -1068,6 +1068,7 @@ struct AdvancedColumnFamilyOptions {
   // TODO(Jiachen): type of secondary index selection
   bool create_global_sec_index = false;
   char* global_sec_index_loc = nullptr;
+  bool global_sec_index_is_spatial = true;
 
   // Create ColumnFamilyOptions with default values for all fields
   AdvancedColumnFamilyOptions();

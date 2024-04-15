@@ -212,6 +212,15 @@ class Block {
                                  RtreeIteratorContext* context,
                                  bool is_secondary_index_scan);
 
+    DataBlockIter* NewSecondaryIndexDataIterator1D(const Comparator* raw_ucmp,
+                                 SequenceNumber global_seqno,
+                                 DataBlockIter* iter,
+                                 Statistics* stats,
+                                 bool block_contents_pinned,
+                                 RtreeIteratorContext* context,
+                                 bool is_secondary_index_scan,
+                                 bool is_secondary_index_spatial);
+
   // Returns an MetaBlockIter for iterating over blocks containing metadata
   // (like Properties blocks).  Unlike data blocks, the keys for these blocks
   // do not contain sequence numbers, do not use a user-define comparator, and
@@ -542,6 +551,16 @@ class DataBlockIter : public BlockIter<Slice> {
                read_amp_bitmap, block_contents_pinned, data_block_hash_index, query,
                is_secondary_index_scan);
   }  
+  DataBlockIter(const Comparator* raw_ucmp, const char* data, uint32_t restarts,
+                uint32_t num_restarts, SequenceNumber global_seqno,
+                BlockReadAmpBitmap* read_amp_bitmap, bool block_contents_pinned,
+                DataBlockHashIndex* data_block_hash_index, const std::string& query,
+                bool is_secondary_index_scan, bool is_secondary_index_spatial)
+      : DataBlockIter() {
+    Initialize(raw_ucmp, data, restarts, num_restarts, global_seqno,
+               read_amp_bitmap, block_contents_pinned, data_block_hash_index, query,
+               is_secondary_index_scan, is_secondary_index_spatial);
+  }  
   void Initialize(const Comparator* raw_ucmp, const char* data,
                   uint32_t restarts, uint32_t num_restarts,
                   SequenceNumber global_seqno,
@@ -599,6 +618,28 @@ class DataBlockIter : public BlockIter<Slice> {
     // std::cout << "query_mbr_: " << query_mbr_ << std::endl;
   }
 
+  void Initialize(const Comparator* raw_ucmp, const char* data,
+                  uint32_t restarts, uint32_t num_restarts,
+                  SequenceNumber global_seqno,
+                  BlockReadAmpBitmap* read_amp_bitmap,
+                  bool block_contents_pinned,
+                  DataBlockHashIndex* data_block_hash_index,
+                  const std::string& query,
+                  bool is_secondary_index_scan,
+                  bool is_secondary_index_spatial) {
+    InitializeBase(raw_ucmp, data, restarts, num_restarts, global_seqno,
+                   block_contents_pinned);
+    raw_key_.SetIsUserKey(false);
+    read_amp_bitmap_ = read_amp_bitmap;
+    last_bitmap_offset_ = current_ + 1;
+    data_block_hash_index_ = data_block_hash_index;
+    Slice query_slice(query);
+    query_valrange_ = ReadValueRange(query_slice);
+    is_spatial_ = is_secondary_index_spatial;
+    is_sec_index_scan_ = is_secondary_index_scan;
+    // std::cout << "query_valrange_: " << query_valrange_ << std::endl;
+  }  
+
   Slice value() const override {
     assert(Valid());
     if (read_amp_bitmap_ && current_ < restarts_ &&
@@ -634,6 +675,7 @@ class DataBlockIter : public BlockIter<Slice> {
   inline bool ParseNextDataKey(bool* is_shared);
   inline bool ParseNextSpatialDataKey(bool* is_shared);
   inline bool ParseNextSecSpatialDataKey(bool* is_shared);
+  inline bool ParseNextSecDataKey(bool* is_shared);
   virtual void SeekToFirstImpl();
   void SeekToLastImpl() override;
   void SeekImpl(const Slice& target) override;
@@ -675,6 +717,7 @@ class DataBlockIter : public BlockIter<Slice> {
   bool is_spatial_;
   bool is_sec_index_scan_;
   Mbr query_mbr_;
+  ValueRange query_valrange_;
 
   bool IntersectMbr(
         const Slice& aa_orig,
@@ -683,6 +726,10 @@ class DataBlockIter : public BlockIter<Slice> {
   bool IntersectMbrExlucdeIID(
         const Slice& aa_orig,
         Mbr bb);
+
+  bool IntersectValueRangePoint(
+        const Slice& aa_orig,
+        ValueRange bb);
 
   bool SeekForGetImpl(const Slice& target);
 };

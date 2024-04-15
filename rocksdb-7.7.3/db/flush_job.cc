@@ -1005,7 +1005,8 @@ Status FlushJob::WriteLevel0Table() {
                    meta_.marked_for_compaction, meta_.temperature,
                    meta_.oldest_blob_file_number, meta_.oldest_ancester_time,
                    meta_.file_creation_time, meta_.file_checksum,
-                   meta_.file_checksum_func_name, meta_.unique_id, meta_.mbr, meta_.sketch);
+                   meta_.file_checksum_func_name, meta_.unique_id, meta_.mbr, meta_.sketch,
+                   meta_.valrange);
     
     // ROCKS_LOG_DEBUG(db_options_.info_log, "Flushed T0 SST File, mbr: %s \n, sketch: %s \n", meta_.mbr.toString().c_str(), meta_.sketch.toString().c_str());
 

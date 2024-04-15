@@ -58,7 +58,7 @@ Status FileMetaData::UpdateBoundaries(const Slice& key, const Slice& value,
   fd.smallest_seqno = std::min(fd.smallest_seqno, seqno);
   fd.largest_seqno = std::max(fd.largest_seqno, seqno);
 
-  // update mbr based on key
+  // update mbr based on key (For spatial-LSM primary key)
   // InternalKey key_temp;
   // key_temp.DecodeFrom(key);
   // Mbr key_mbr = ReadKeyMbr(key_temp.user_key());
@@ -70,9 +70,15 @@ Status FileMetaData::UpdateBoundaries(const Slice& key, const Slice& value,
   // for different secondary attributes,
   // different meta data shall be used
   // support for different attribute will be added later
-  Mbr value_mbr = ReadValueMbr(value);
-  expandMbrExcludeIID(mbr, value_mbr);
-  sketch.addMbr(value_mbr);
+
+  // For 1D numerical value
+  double numeric_val = *reinterpret_cast<const double*>(value.data());
+  expandSecValueRangeP(valrange, numeric_val);
+
+  // For 2D spatial value
+  // Mbr value_mbr = ReadValueMbr(value);
+  // expandMbrExcludeIID(mbr, value_mbr);
+  // sketch.addMbr(value_mbr);
 
   return Status::OK();
 }

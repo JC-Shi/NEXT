@@ -700,6 +700,28 @@ class VersionBuilder::Rep {
     return meta->mbr;
   }  
 
+  ValueRange GetValRangeForTableFile(int level,
+                        uint64_t file_number) const {
+    assert(level < num_levels_);
+
+    const auto& added_files = levels_[level].added_files;
+
+    auto it = added_files.find(file_number);
+    if (it != added_files.end()) {
+      const FileMetaData* const meta = it->second;
+      assert(meta);
+
+      return meta->valrange;
+    }
+
+    assert(base_vstorage_);
+    const FileMetaData* const meta =
+        base_vstorage_->GetFileMetaDataByNumber(file_number);
+    assert(meta);
+
+    return meta->valrange;
+  }  
+
   Status ApplyFileDeletion(int level, uint64_t file_number) {
     assert(level != VersionStorageInfo::FileLocation::Invalid().GetLevel());
 
@@ -865,7 +887,8 @@ class VersionBuilder::Rep {
     // A global secondary rtree will be initiated by load from current file
     // then changes of files will be applied on the rtree and save it back
     typedef std::pair<int, uint64_t> GlobalSecDataType;
-    typedef RTree<GlobalSecDataType, double, 2, double> GlobalSecRtree;
+    
+    typedef RTree<GlobalSecDataType, double, 1, double> GlobalSecRtree;
     GlobalSecRtree global_rtree;    
     if (ioptions_->global_sec_index) {
       global_rtree.Load(ioptions_->global_index_loc);
@@ -899,10 +922,16 @@ class VersionBuilder::Rep {
       // if global rtree is activated
       // remove entry from global rtree for each deleted files
       if(ioptions_->global_sec_index) {
-        const Mbr filembr = GetMbrForTableFile(level, file_number);
-        // std::cout << "deleted mbr: " << filembr << std::endl;
-        Rect filerect(filembr.first.min, filembr.second.min, filembr.first.max, filembr.second.max);
-        global_rtree.Remove(filerect.min, filerect.max, std::make_pair(level, file_number));
+        if (!ioptions_->global_sec_index_is_spatial){
+          const ValueRange valrange = GetValRangeForTableFile(level, file_number);
+          Rect1D filerect(valrange.range.min, valrange.range.max);
+          global_rtree.Remove(filerect.min, filerect.max, std::make_pair(level, file_number));
+        } else {
+          const Mbr filembr = GetMbrForTableFile(level, file_number);
+          // std::cout << "deleted mbr: " << filembr << std::endl;
+          Rect filerect(filembr.first.min, filembr.second.min, filembr.first.max, filembr.second.max);
+          global_rtree.Remove(filerect.min, filerect.max, std::make_pair(level, file_number));          
+        }
       }
 
       const Status s = ApplyFileDeletion(level, file_number);
@@ -920,12 +949,18 @@ class VersionBuilder::Rep {
       // the index value will be rect based on mbr
       // the index data contains file level and filenumber
       if(ioptions_->global_sec_index) {
-        Mbr filembr = meta.mbr;
-        // std::cout << "added mbr: " << filembr << std::endl;
-        Rect filerect(filembr.first.min, filembr.second.min, filembr.first.max, filembr.second.max);
         const uint64_t filenumber = meta.fd.GetNumber();
-        global_rtree.Insert(filerect.min, filerect.max, std::make_pair(level, filenumber));
-        // std::cout << "filerect: " << filerect.min[0] << ";" << filerect.max[0] << std::endl;
+        if (!ioptions_->global_sec_index_is_spatial) {
+          ValueRange filevalrange = meta.valrange;
+          Rect1D filerect(filevalrange.range.min, filevalrange.range.max);
+          global_rtree.Insert(filerect.min, filerect.max, std::make_pair(level, filenumber));
+        } else {
+          Mbr filembr = meta.mbr;
+          // std::cout << "added mbr: " << filembr << std::endl;
+          Rect filerect(filembr.first.min, filembr.second.min, filembr.first.max, filembr.second.max);
+          global_rtree.Insert(filerect.min, filerect.max, std::make_pair(level, filenumber));
+          // std::cout << "filerect: " << filerect.min[0] << ";" << filerect.max[0] << std::endl;          
+        }
       }
 
       const Status s = ApplyFileAddition(level, meta);

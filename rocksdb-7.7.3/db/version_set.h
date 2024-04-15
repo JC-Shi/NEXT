@@ -1082,7 +1082,7 @@ class Version {
   // TODO(Jiachen) setting the variable based on the sec index type
   // Currently this may be mannually adjusted
   typedef std::pair<int, uint64_t> GlobalSecDataType;
-  typedef RTree<GlobalSecDataType, double, 2, double> GlobalSecRtree;
+  typedef RTree<GlobalSecDataType, double, 1, double> GlobalSecRtree;
   GlobalSecRtree global_rtree_;
 
   // A version number that uniquely represents this version. This is

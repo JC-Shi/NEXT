@@ -100,9 +100,13 @@ TBlockIter* BlockBasedTable::NewDataBlockIterator(
     if (!ro.is_secondary_index_scan) {
       iter = InitBlockIterator(rep_, block.GetValue(), BlockType::kData, iter,
                                         block_contents_pinned, iterator_context);
-    } else {
+    } else if (ro.is_secondary_index_spatial) {
       iter = InitBlockIterator(ro.is_secondary_index_scan, rep_, block.GetValue(), BlockType::kData, iter,
                                         block_contents_pinned, iterator_context);      
+    } else {
+      iter = InitBlockIterator(ro.is_secondary_index_scan, ro.is_secondary_index_spatial, 
+                                rep_, block.GetValue(), BlockType::kData, iter,
+                                block_contents_pinned, iterator_context);
     }
 
   }
@@ -178,9 +182,13 @@ TBlockIter* BlockBasedTable::NewDataBlockIterator(const ReadOptions& ro,
     if (!ro.is_secondary_index_scan) {
       iter = InitBlockIterator(rep_, block.GetValue(), BlockType::kData, iter,
                                         block_contents_pinned, iterator_context);
-    } else {
+    } else if (ro.is_secondary_index_spatial) {
       iter = InitBlockIterator(ro.is_secondary_index_scan, rep_, block.GetValue(), BlockType::kData, iter,
                                         block_contents_pinned, iterator_context);      
+    } else {
+      iter = InitBlockIterator(ro.is_secondary_index_scan, ro.is_secondary_index_spatial, 
+                                        rep_, block.GetValue(), BlockType::kData, iter,
+                                        block_contents_pinned, iterator_context); 
     }
 
   }

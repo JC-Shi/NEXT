@@ -142,12 +142,14 @@ struct DecodeEntryV4 {
 void DataBlockIter::NextImpl() {
   // std::cout << "using NextImpl of DataBlockIter" << std::endl;
   bool is_shared = false;
-  if (!is_spatial_) {
+  if (!is_spatial_ && !is_sec_index_scan_) {
     ParseNextDataKey(&is_shared);
   } else if (!is_sec_index_scan_) {
     ParseNextSpatialDataKey(&is_shared);
-  } else {
+  } else if (is_spatial_) {
     ParseNextSecSpatialDataKey(&is_shared);
+  } else {
+    ParseNextSecDataKey(&is_shared);
   }
 }
 
@@ -527,13 +529,15 @@ void DataBlockIter::SeekToFirstImpl() {
   SeekToRestartPoint(0);
   bool is_shared = false;
   // std::cout << "seekforfirstimpl" << std::endl;
-  if (!is_spatial_) {
+  if (!is_spatial_ && !is_sec_index_scan_) {
     ParseNextDataKey(&is_shared);
   }
   else if (!is_sec_index_scan_) {
     ParseNextSpatialDataKey(&is_shared);
-  } else {
+  } else if (is_spatial_) {
     ParseNextSecSpatialDataKey(&is_shared);
+  } else {
+    ParseNextSecDataKey(&is_shared);
   }
 }
 
@@ -686,6 +690,16 @@ bool DataBlockIter::ParseNextSecSpatialDataKey(bool* is_shared) {
     UpdateKey();
     // std::cout << "parsed sec spatial key" << std::endl;
   } while (Valid() && !IntersectMbrExlucdeIID(value(), query_mbr_));
+  return ret;
+}
+
+bool DataBlockIter::ParseNextSecDataKey(bool* is_shared) {
+  bool ret = false;
+  do {
+    ret = ParseNextDataKey(is_shared);
+    UpdateKey();
+    // std::cout << "parsed sec spatial key" << std::endl;
+  } while (Valid() && !IntersectValueRangePoint(value(), query_valrange_));
   return ret;
 }
 
@@ -1215,6 +1229,59 @@ DataBlockIter* Block::NewSecondaryIndexDataIterator(const Comparator* raw_ucmp,
   return ret_iter;
 }
 
+DataBlockIter* Block::NewSecondaryIndexDataIterator1D(const Comparator* raw_ucmp,
+                                      SequenceNumber global_seqno,
+                                      DataBlockIter* iter, Statistics* stats,
+                                      bool block_contents_pinned,
+                                      RtreeIteratorContext* context,
+                                      bool is_secondary_index_scan,
+                                      bool is_secondary_index_spatial) {
+  // std::cout << "created new spatial data iterator" << std::endl;
+  DataBlockIter* ret_iter;
+  if (iter != nullptr) {
+    ret_iter = iter;
+  } else {
+    ret_iter = new DataBlockIter;
+  }
+  if (size_ < 2 * sizeof(uint32_t)) {
+    ret_iter->Invalidate(Status::Corruption("bad block contents"));
+    return ret_iter;
+  }
+  if (num_restarts_ == 0) {
+    // Empty block.
+    ret_iter->Invalidate(Status::OK());
+    return ret_iter;
+  } else {
+    if (context == nullptr && is_secondary_index_scan == false) {
+      ret_iter->Initialize(
+          raw_ucmp, data_, restart_offset_, num_restarts_, global_seqno,
+          read_amp_bitmap_.get(), block_contents_pinned,
+          data_block_hash_index_.Valid() ? &data_block_hash_index_ : nullptr); 
+    } else if (is_secondary_index_spatial) {
+      ret_iter->Initialize(
+          raw_ucmp, data_, restart_offset_, num_restarts_, global_seqno,
+          read_amp_bitmap_.get(), block_contents_pinned,
+          data_block_hash_index_.Valid() ? &data_block_hash_index_ : nullptr, context->query_mbr,
+          is_secondary_index_scan); 
+    } else {
+      ret_iter->Initialize(
+          raw_ucmp, data_, restart_offset_, num_restarts_, global_seqno,
+          read_amp_bitmap_.get(), block_contents_pinned,
+          data_block_hash_index_.Valid() ? &data_block_hash_index_ : nullptr, context->query_mbr,
+          is_secondary_index_scan, is_secondary_index_spatial);       
+    }
+
+    if (read_amp_bitmap_) {
+      if (read_amp_bitmap_->GetStatistics() != stats) {
+        // DB changed the Statistics pointer, we need to notify read_amp_bitmap_
+        read_amp_bitmap_->SetStatistics(stats);
+      }
+    }
+  }
+
+  return ret_iter;
+}
+
 IndexBlockIter* Block::NewIndexIterator(
     const Comparator* raw_ucmp, SequenceNumber global_seqno,
     IndexBlockIter* iter, Statistics* /*stats*/, bool total_order_seek,
@@ -1364,6 +1431,28 @@ bool DataBlockIter::IntersectMbr(
     if (aa_min > bb.second.max || bb.second.min > aa_max) {
       return false;
     }
+    return true;
+}
+
+bool DataBlockIter::IntersectValueRangePoint(
+    const Slice& aa_orig,
+    ValueRange bb) {
+  // If the query bounding box is empty, return true, which corresponds to a
+    // full table scan
+    if (bb.empty()) {
+      return true;
+    }
+
+    // Make a mutable copy of the slice
+    Slice aa = Slice(aa_orig);
+
+    double aa_val;
+
+    aa_val = *reinterpret_cast<const double*>(aa.data());
+    if (aa_val > bb.range.max || bb.range.min > aa_val) {
+      return false;
+    }
+
     return true;
 }
 

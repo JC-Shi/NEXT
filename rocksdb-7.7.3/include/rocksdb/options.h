@@ -1708,6 +1708,7 @@ struct ReadOptions {
   // Adding Secondary Index Options
   // Default: false
   bool is_secondary_index_scan=false;
+  bool is_secondary_index_spatial=true;
 
   ReadOptions();
   ReadOptions(bool cksum, bool cache);

@@ -102,6 +102,41 @@ namespace rocksdb {
         }
     };
 
+    class ValueRange{
+    public:
+        ValueRange() : isempty_(true) {}
+
+        // Whether any valued were set or not (true no values were set yet)
+        bool empty() { return isempty_; };
+        // Unset the Mbr
+        void clear() { isempty_ = true; };
+
+        void set_range(const double min, const double max) {
+            range = {min, max};
+            isempty_ = false;
+        }
+
+        // It's 1 dimensional struct with 64-bit min and max values
+        size_t size() const {
+            return 16;
+        }
+
+        friend std::ostream& operator<<(std::ostream& os, const ValueRange& valrange) {
+            return os << "[" << valrange.range << "]";
+        };
+
+        std::string toString() const {
+            std::stringstream ss;
+            ss << (*this);
+            return ss.str();
+        }
+
+        Interval range;
+
+    private:
+        bool isempty_;
+    };
+
     class Mbr {
     public:
         Mbr() : isempty_(true) {}
@@ -301,21 +336,40 @@ namespace rocksdb {
         double max[2];
     };
 
+    struct Rect1D {
+        Rect1D () {}
+
+        Rect1D(double a_minX, double a_maxX)
+        {
+            min[0] = a_minX;
+            max[0] = a_maxX;
+        }
+
+        double min[1];
+        double max[1];
+    };
+
     extern double GetMbrArea(Mbr aa);
     extern double GetOverlappingArea(Mbr aa, Mbr bb);
 
     extern bool IntersectMbr(Mbr aa, Mbr bb);
     extern bool IntersectMbrExcludeIID(Mbr aa, Mbr bb);
+    extern bool IntersectValRangePoint(ValueRange aa, double bb);
+    extern bool IntersectValRange(ValueRange aa, ValueRange bb);
     extern Mbr ReadKeyMbr(Slice data);
     extern Mbr ReadValueMbr(Slice data);
+    extern ValueRange ReadValueRange(Slice data);
 
     // Reads the mbr (intervals) from the key. It modifies the key slice.
     extern Mbr ReadQueryMbr(Slice data);
     extern Mbr ReadSecQueryMbr(Slice data);
     extern std::string serializeMbr(const Mbr& mbr);
     extern std::string serializeMbrExcludeIID(const Mbr& mbr);
+    extern std::string serializeValueRange(const ValueRange& valrange);
     extern void expandMbr(Mbr& to_expand, Mbr expander);
     extern void expandMbrExcludeIID(Mbr& to_expand, Mbr expander);
+    extern void expandSecValueRangeP(ValueRange& to_expand, double expander);
+    extern void expandSecValueRange(ValueRange& to_expand, ValueRange expander);
 
     extern bool GlobalRTreeCallback(std::pair<int, uint64_t> index_data);
 

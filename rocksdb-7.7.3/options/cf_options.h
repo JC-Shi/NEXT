@@ -90,6 +90,7 @@ struct ImmutableCFOptions {
 
   bool global_sec_index;
   char* global_index_loc;
+  bool global_sec_index_is_spatial;
 };
 
 struct ImmutableOptions : public ImmutableDBOptions, public ImmutableCFOptions {
@@ -176,7 +177,8 @@ struct MutableCFOptions {
             options.sample_for_compression),  // TODO: is 0 fine here?
         compression_per_level(options.compression_per_level),
         create_global_sec_index(options.create_global_sec_index),
-        global_sec_index_loc(options.global_sec_index_loc) {
+        global_sec_index_loc(options.global_sec_index_loc),
+        global_sec_index_is_spatial(options.global_sec_index_is_spatial) {
     RefreshDerivedOptions(options.num_levels, options.compaction_style);
   }
 
@@ -225,7 +227,8 @@ struct MutableCFOptions {
         memtable_protection_bytes_per_key(0),
         sample_for_compression(0),
         create_global_sec_index(false),
-        global_sec_index_loc(nullptr) {}
+        global_sec_index_loc(nullptr),
+        global_sec_index_is_spatial(true) {}
 
   explicit MutableCFOptions(const Options& options);
 
@@ -321,6 +324,7 @@ struct MutableCFOptions {
   // global secondary index options
   bool create_global_sec_index;
   char* global_sec_index_loc;
+  bool global_sec_index_is_spatial;
 
   // Derived options
   // Per-level target file size.
