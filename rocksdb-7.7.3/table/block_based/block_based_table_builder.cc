@@ -2214,6 +2214,14 @@ void BlockBasedTableBuilder::SetSeqnoTimeTableProperties(
   rep_->props.creation_time = oldest_ancestor_time;
 }
 
+void BlockBasedTableBuilder::GetSecondaryEntries(
+  std::vector<std::pair<std::string, BlockHandle>>* sec_entries) {
+  std::vector<std::pair<std::string, BlockHandle>> secondary_entries;
+  rep_->sec_index_builder->get_Secondary_Entries(&secondary_entries);
+  *sec_entries = secondary_entries;
+  secondary_entries.clear();
+}
+
 const std::string BlockBasedTable::kObsoleteFilterBlockPrefix = "filter.";
 const std::string BlockBasedTable::kFullFilterBlockPrefix = "fullfilter.";
 const std::string BlockBasedTable::kPartitionedFilterBlockPrefix =

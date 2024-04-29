@@ -2138,6 +2138,7 @@ InternalIterator* BlockBasedTable::NewIterator(
           rep_->index_type == BlockBasedTableOptions::kHashSearch,
       /*input_iter=*/nullptr, /*get_context=*/nullptr, &lookup_context));
   // std::cout << "finish creating new index iterator" << std::endl;
+  
   if (arena == nullptr) {
     return new BlockBasedTableIterator(
         this, read_options, rep_->internal_comparator, std::move(index_iter),
@@ -2815,7 +2816,7 @@ Status BlockBasedTable::CreateSecIndexReader(
     InternalIterator* meta_iter, bool use_cache, bool prefetch, bool pin,
     BlockCacheLookupContext* lookup_context,
     std::unique_ptr<IndexReader>* sec_index_reader) {
-  std::cout << "start CreateSecIndexReader"  << std::endl;
+  // std::cout << "start CreateSecIndexReader"  << std::endl;
 
   if (is_sec_index_spatial) {
     return RtreeSecIndexReader::Create(this, ro, prefetch_buffer, meta_iter,

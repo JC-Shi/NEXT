@@ -688,7 +688,7 @@ bool DataBlockIter::ParseNextSecSpatialDataKey(bool* is_shared) {
   do {
     ret = ParseNextDataKey(is_shared);
     UpdateKey();
-    // std::cout << "parsed sec spatial key" << std::endl;
+    
   } while (Valid() && !IntersectMbrExlucdeIID(value(), query_mbr_));
   return ret;
 }

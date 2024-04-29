@@ -29,6 +29,17 @@ uint64_t PackFileNumberAndPathId(uint64_t number, uint64_t path_id) {
   return number | (path_id * (kFileNumberMask + 1));
 }
 
+Status FileMetaData::UpdateSecEntries(std::vector<std::pair<std::string, BlockHandle>>& SecEntries) {
+
+  for(const std::pair<std::string, BlockHandle>& se : SecEntries){
+    Mbr blockmbr = ReadValueMbr(se.first);
+    BlockHandle blkhandle = se.second;
+    SecondaryEntries.emplace_back(std::make_pair(blockmbr, blkhandle));
+  }
+  
+  return Status::OK();
+}
+
 Status FileMetaData::UpdateBoundaries(const Slice& key, const Slice& value,
                                       SequenceNumber seqno,
                                       ValueType value_type) {
@@ -72,13 +83,13 @@ Status FileMetaData::UpdateBoundaries(const Slice& key, const Slice& value,
   // support for different attribute will be added later
 
   // For 1D numerical value
-  double numeric_val = *reinterpret_cast<const double*>(value.data());
-  expandSecValueRangeP(valrange, numeric_val);
+  // double numeric_val = *reinterpret_cast<const double*>(value.data());
+  // expandSecValueRangeP(valrange, numeric_val);
 
   // For 2D spatial value
-  // Mbr value_mbr = ReadValueMbr(value);
-  // expandMbrExcludeIID(mbr, value_mbr);
-  // sketch.addMbr(value_mbr);
+  Mbr value_mbr = ReadValueMbr(value);
+  expandMbrExcludeIID(mbr, value_mbr);
+  sketch.addMbr(value_mbr);
 
   return Status::OK();
 }

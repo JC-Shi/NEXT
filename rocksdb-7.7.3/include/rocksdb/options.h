@@ -1709,6 +1709,7 @@ struct ReadOptions {
   // Default: false
   bool is_secondary_index_scan=false;
   bool is_secondary_index_spatial=true;
+  std::vector<std::pair<uint64_t, uint64_t>>* found_sec_blkhandle = new std::vector<std::pair<uint64_t, uint64_t>>();
 
   ReadOptions();
   ReadOptions(bool cksum, bool cache);

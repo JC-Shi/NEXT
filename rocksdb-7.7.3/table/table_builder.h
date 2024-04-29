@@ -214,6 +214,10 @@ class TableBuilder {
   virtual void SetSeqnoTimeTableProperties(
       const std::string& /*encoded_seqno_to_time_mapping*/,
       uint64_t /*oldest_ancestor_time*/){};
+
+  virtual void GetSecondaryEntries(std::vector<std::pair<std::string, BlockHandle>>* sec_entries) {
+    (void) sec_entries;
+  };
 };
 
 }  // namespace ROCKSDB_NAMESPACE

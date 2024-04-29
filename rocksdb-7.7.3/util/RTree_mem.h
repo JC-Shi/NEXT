@@ -1693,7 +1693,7 @@ bool RTREE_QUAL::Search(Node* a_node, Rect* a_rect, std::vector<DATATYPE>& a_ret
       {
         DATATYPE& indexdata = a_node->m_branch[index].m_data;
         // std::cout << "found data" << std::endl;
-        a_return_res.push_back(indexdata);
+        a_return_res.emplace_back(indexdata);
 
           if(callback && !callback(indexdata))
           {

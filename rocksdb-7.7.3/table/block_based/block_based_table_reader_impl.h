@@ -33,6 +33,8 @@ TBlockIter* BlockBasedTable::NewDataBlockIterator(
 
   TBlockIter* iter = input_iter != nullptr ? input_iter : new TBlockIter;
 
+  // std::cout << "NewDataBlockItertor" << std::endl;
+
   if (!s.ok()) {
     iter->Invalidate(s);
     return iter;
@@ -63,6 +65,8 @@ TBlockIter* BlockBasedTable::NewDataBlockIterator(
         /* use_cache */ true, /* wait_for_cache */ true, async_read);
   }
 
+  // std::cout << "retrieved block" << std::endl;
+
   if (s.IsTryAgain() && async_read) {
     return iter;
   }
@@ -86,6 +90,7 @@ TBlockIter* BlockBasedTable::NewDataBlockIterator(
       block.IsCached() ||
       (!block.GetValue()->own_bytes() && rep_->immortal_table);
 
+  // std::cout << "before initblockiterator" << std::endl;
   if (ro.iterator_context == nullptr) {
     iter = InitBlockIterator<TBlockIter>(rep_, block.GetValue(), block_type, iter,
                                        block_contents_pinned);

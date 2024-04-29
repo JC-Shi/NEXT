@@ -31,6 +31,11 @@ Status CompactionOutputs::Finish(const Status& intput_status,
                                           meta->oldest_ancester_time);
     s = builder_->Finish();
 
+    std::vector<std::pair<std::string, BlockHandle>> secondary_index_entries;
+    builder_->GetSecondaryEntries(&secondary_index_entries);
+    s = meta->UpdateSecEntries(secondary_index_entries);
+    secondary_index_entries.clear();
+
   } else {
     builder_->Abandon();
   }

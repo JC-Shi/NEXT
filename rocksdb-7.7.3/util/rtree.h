@@ -13,8 +13,26 @@
 #include <iostream>
 
 #include "rocksdb/options.h"
+#include "table/format.h"
 
 namespace rocksdb {
+
+    struct GlobalSecIndexValue {
+        int id;
+        uint64_t filenum;
+        BlockHandle blkhandle;
+
+        GlobalSecIndexValue() {}
+
+        GlobalSecIndexValue(int _id, u_int64_t _filenum, BlockHandle _blkhandle):
+            id(_id), filenum(_filenum), blkhandle(_blkhandle) {}
+        
+        ~GlobalSecIndexValue() {}
+
+        inline bool operator==(const GlobalSecIndexValue& rhs) const {
+            return id == rhs.id && filenum == rhs.filenum && blkhandle == rhs.blkhandle;
+        }
+    };
 
     // struct SketchPoint
     // {
@@ -371,6 +389,6 @@ namespace rocksdb {
     extern void expandSecValueRangeP(ValueRange& to_expand, double expander);
     extern void expandSecValueRange(ValueRange& to_expand, ValueRange expander);
 
-    extern bool GlobalRTreeCallback(std::pair<int, uint64_t> index_data);
+    // extern bool GlobalRTreeCallback(std::pair<uint64_t, BlockHandle> index_data);
 
 }  // namespace rocksdb

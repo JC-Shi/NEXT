@@ -1031,6 +1031,11 @@ class Version {
   // This accumulated stats will be used in compaction.
   void UpdateAccumulatedStats();
 
+  static bool GlobalRTreeCallback(GlobalSecIndexValue index_data) {
+    (void) index_data;
+    return true;
+  }
+
   DECLARE_SYNC_AND_ASYNC(
       /* ret_type */ Status, /* func_name */ MultiGetFromSST,
       const ReadOptions& read_options, MultiGetRange file_range,
@@ -1081,8 +1086,7 @@ class Version {
   // For Global Secondary Index
   // TODO(Jiachen) setting the variable based on the sec index type
   // Currently this may be mannually adjusted
-  typedef std::pair<int, uint64_t> GlobalSecDataType;
-  typedef RTree<GlobalSecDataType, double, 1, double> GlobalSecRtree;
+  typedef RTree<GlobalSecIndexValue, double, 2, double> GlobalSecRtree;
   GlobalSecRtree global_rtree_;
 
   // A version number that uniquely represents this version. This is

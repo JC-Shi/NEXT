@@ -104,6 +104,8 @@ class BlockBasedTableBuilder : public TableBuilder {
       const std::string& encoded_seqno_to_time_mapping,
       uint64_t oldest_ancestor_time) override;
 
+  void GetSecondaryEntries(std::vector<std::pair<std::string, BlockHandle>>* sec_entries) override;
+
  private:
   bool ok() const { return status().ok(); }
 

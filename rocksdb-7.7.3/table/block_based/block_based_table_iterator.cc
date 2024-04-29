@@ -246,36 +246,45 @@ void BlockBasedTableIterator::Prev() {
 }
 
 void BlockBasedTableIterator::InitDataBlock() {
+  // std::cout << "index_iter_ key mbr: " << ReadValueMbr(index_iter_->key()) << std::endl; 
   BlockHandle data_block_handle = index_iter_->value().handle;
-  if (!block_iter_points_to_real_block_ ||
-      data_block_handle.offset() != prev_block_offset_ ||
-      // if previous attempt of reading the block missed cache, try again
-      block_iter_.status().IsIncomplete()) {
-    if (block_iter_points_to_real_block_) {
-      ResetDataIter();
-    }
-    auto* rep = table_->get_rep();
+  bool first_seen_handle = seen_handles_.count(data_block_handle.offset());
+  // std::cout << "block handle offset: " << data_block_handle.offset() << " first seen: " << first_seen_handle << std::endl;
+  if (!first_seen_handle) {
+    if (!block_iter_points_to_real_block_ ||
+        data_block_handle.offset() != prev_block_offset_ ||
+        // if previous attempt of reading the block missed cache, try again
+        block_iter_.status().IsIncomplete()) {
+      if (block_iter_points_to_real_block_) {
+        ResetDataIter();
+      }
+      auto* rep = table_->get_rep();
 
-    bool is_for_compaction =
-        lookup_context_.caller == TableReaderCaller::kCompaction;
-    // Prefetch additional data for range scans (iterators).
-    // Implicit auto readahead:
-    //   Enabled after 2 sequential IOs when ReadOptions.readahead_size == 0.
-    // Explicit user requested readahead:
-    //   Enabled from the very first IO when ReadOptions.readahead_size is set.
-    block_prefetcher_.PrefetchIfNeeded(
-        rep, data_block_handle, read_options_.readahead_size, is_for_compaction,
-        /*no_sequential_checking=*/false, read_options_.rate_limiter_priority);
-    Status s;
-    // std::cout << "Created NewDataBlockIterator with InitDataBlock" << std::endl;
-    table_->NewDataBlockIterator<DataBlockIter>(
-        read_options_, data_block_handle, &block_iter_, BlockType::kData,
-        /*get_context=*/nullptr, &lookup_context_,
-        block_prefetcher_.prefetch_buffer(),
-        /*for_compaction=*/is_for_compaction, /*async_read=*/false, s);
-    block_iter_points_to_real_block_ = true;
-    CheckDataBlockWithinUpperBound();
+      bool is_for_compaction =
+          lookup_context_.caller == TableReaderCaller::kCompaction;
+      // Prefetch additional data for range scans (iterators).
+      // Implicit auto readahead:
+      //   Enabled after 2 sequential IOs when ReadOptions.readahead_size == 0.
+      // Explicit user requested readahead:
+      //   Enabled from the very first IO when ReadOptions.readahead_size is set.
+      block_prefetcher_.PrefetchIfNeeded(
+          rep, data_block_handle, read_options_.readahead_size, is_for_compaction,
+          /*no_sequential_checking=*/false, read_options_.rate_limiter_priority);
+      Status s;
+      // std::cout << "Created NewDataBlockIterator with InitDataBlock" << std::endl;
+      table_->NewDataBlockIterator<DataBlockIter>(
+          read_options_, data_block_handle, &block_iter_, BlockType::kData,
+          /*get_context=*/nullptr, &lookup_context_,
+          block_prefetcher_.prefetch_buffer(),
+          /*for_compaction=*/is_for_compaction, /*async_read=*/false, s);
+      block_iter_points_to_real_block_ = true;
+      CheckDataBlockWithinUpperBound();
+    }   
+    seen_handles_.insert(data_block_handle.offset());
+  } else {
+    std::cout << "filter duplicated" << std::endl;
   }
+
 }
 
 void BlockBasedTableIterator::AsyncInitDataBlock(bool is_first_pass) {

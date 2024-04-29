@@ -160,6 +160,7 @@ InternalIteratorBase<IndexValue>* RtreeSecIndexReader::NewIterator(
     // std::cout << "adding iterator context" << std::endl;
     ro.iterator_context = read_options.iterator_context;
     ro.is_secondary_index_scan = read_options.is_secondary_index_scan;
+    ro.found_sec_blkhandle = read_options.found_sec_blkhandle;
     // std::cout << "rtree_sec_index_reader::" << (ro.iterator_context == nullptr) << std::endl;
     // RtreeIteratorContext* context =
     //     reinterpret_cast<RtreeIteratorContext*>(ro.iterator_context);

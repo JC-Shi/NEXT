@@ -34,6 +34,8 @@
 #include "table/table_reader.h"
 #include "util/string_util.h"
 #include "util/RTree_mem.h"
+#include "util/rtree.h"
+#include "util/z_curve.h"
 
 namespace ROCKSDB_NAMESPACE {
 
@@ -700,6 +702,28 @@ class VersionBuilder::Rep {
     return meta->mbr;
   }  
 
+  std::vector<std::pair<Mbr, BlockHandle>> GetSecEntriesForTableFile(int level,
+                        uint64_t file_number) const {
+    assert(level < num_levels_);
+
+    const auto& added_files = levels_[level].added_files;
+
+    auto it = added_files.find(file_number);
+    if (it != added_files.end()) {
+      const FileMetaData* const meta = it->second;
+      assert(meta);
+
+      return meta->SecondaryEntries;
+    }
+
+    assert(base_vstorage_);
+    const FileMetaData* const meta =
+        base_vstorage_->GetFileMetaDataByNumber(file_number);
+    assert(meta);
+
+    return meta->SecondaryEntries;
+  }  
+
   ValueRange GetValRangeForTableFile(int level,
                         uint64_t file_number) const {
     assert(level < num_levels_);
@@ -886,9 +910,8 @@ class VersionBuilder::Rep {
     // when applying version edits to a version
     // A global secondary rtree will be initiated by load from current file
     // then changes of files will be applied on the rtree and save it back
-    typedef std::pair<int, uint64_t> GlobalSecDataType;
-    
-    typedef RTree<GlobalSecDataType, double, 1, double> GlobalSecRtree;
+  
+    typedef RTree<GlobalSecIndexValue, double, 2, double> GlobalSecRtree;
     GlobalSecRtree global_rtree;    
     if (ioptions_->global_sec_index) {
       global_rtree.Load(ioptions_->global_index_loc);
@@ -923,14 +946,31 @@ class VersionBuilder::Rep {
       // remove entry from global rtree for each deleted files
       if(ioptions_->global_sec_index) {
         if (!ioptions_->global_sec_index_is_spatial){
-          const ValueRange valrange = GetValRangeForTableFile(level, file_number);
-          Rect1D filerect(valrange.range.min, valrange.range.max);
-          global_rtree.Remove(filerect.min, filerect.max, std::make_pair(level, file_number));
+          // const ValueRange valrange = GetValRangeForTableFile(level, file_number);
+          // Rect1D filerect(valrange.range.min, valrange.range.max);
+          // global_rtree.Remove(filerect.min, filerect.max, std::make_pair(level, file_number));
         } else {
-          const Mbr filembr = GetMbrForTableFile(level, file_number);
-          // std::cout << "deleted mbr: " << filembr << std::endl;
-          Rect filerect(filembr.first.min, filembr.second.min, filembr.first.max, filembr.second.max);
-          global_rtree.Remove(filerect.min, filerect.max, std::make_pair(level, file_number));          
+          // // global index @ tuple level
+          // const std::vector<std::pair<int, Mbr>> filetuples= GetTupleMbrForTableFile(level, file_number);
+          // for (const std::pair<int, Mbr>& tuple : filetuples) {
+          //   int tupleid = tuple.first;
+          //   Mbr tuplembr = tuple.second;
+          //   Rect tuplerect(tuplembr.first.min, tuplembr.second.min, tuplembr.first.max, tuplembr.second.max);
+          //   global_rtree.Remove(tuplerect.min, tuplerect.max, std::make_pair(tupleid, file_number));
+          // }
+
+          // global index @ block level
+          const std::vector<std::pair<Mbr, BlockHandle>> file_secentries = GetSecEntriesForTableFile(level, file_number);         
+          // std::cout << "delete: " <<  file_number << "; filetuple_entries.size: " << static_cast<int>(file_secentries.size()) << std::endl;
+          int glosecid = 0;
+          for (const std::pair<Mbr, BlockHandle>& entry: file_secentries) {    
+            Mbr entrymbr = entry.first;
+            BlockHandle entryblkhandle = entry.second;
+            GlobalSecIndexValue sec_index_val(glosecid, file_number, entryblkhandle);
+            Rect tuplerect(entrymbr.first.min, entrymbr.second.min, entrymbr.first.max, entrymbr.second.max);
+            global_rtree.Remove(tuplerect.min, tuplerect.max, sec_index_val);
+            glosecid++;
+          }   
         }
       }
 
@@ -951,15 +991,32 @@ class VersionBuilder::Rep {
       if(ioptions_->global_sec_index) {
         const uint64_t filenumber = meta.fd.GetNumber();
         if (!ioptions_->global_sec_index_is_spatial) {
-          ValueRange filevalrange = meta.valrange;
-          Rect1D filerect(filevalrange.range.min, filevalrange.range.max);
-          global_rtree.Insert(filerect.min, filerect.max, std::make_pair(level, filenumber));
+          // ValueRange filevalrange = meta.valrange;
+          // Rect1D filerect(filevalrange.range.min, filevalrange.range.max);
+          // global_rtree.Insert(filerect.min, filerect.max, std::make_pair(level, filenumber));
         } else {
-          Mbr filembr = meta.mbr;
-          // std::cout << "added mbr: " << filembr << std::endl;
-          Rect filerect(filembr.first.min, filembr.second.min, filembr.first.max, filembr.second.max);
-          global_rtree.Insert(filerect.min, filerect.max, std::make_pair(level, filenumber));
-          // std::cout << "filerect: " << filerect.min[0] << ";" << filerect.max[0] << std::endl;          
+          // // For global index @ tuple level
+          // std::vector<std::pair<int, Mbr>> filetuplembrs = meta.tuple_mbrs;
+          // for (const std::pair<int, Mbr>& tuple: filetuplembrs) {
+          //   int tupleid = tuple.first;
+          //   Mbr tuplembr = tuple.second;
+          //   Rect tuplerect(tuplembr.first.min, tuplembr.second.min, tuplembr.first.max, tuplembr.second.max);
+          //   global_rtree.Insert(tuplerect.min, tuplerect.max, std::make_pair(tupleid, filenumber));
+          // }
+
+          // For global index @ file group level
+          std::vector<std::pair<Mbr, BlockHandle>> filetuple_entries = meta.SecondaryEntries;
+          // std::cout << "insert: " << filenumber << "; filetuple_entries.size: " << static_cast<int>(filetuple_entries.size()) << std::endl;
+         
+          int rtree_id = 0;         
+          for (const std::pair<Mbr, BlockHandle>& entry: filetuple_entries) { 
+            Mbr entrymbr = entry.first;
+            BlockHandle entryblkhandle = entry.second;
+            GlobalSecIndexValue sec_indexval(rtree_id, filenumber, entryblkhandle);
+            Rect tuplerect(entrymbr.first.min, entrymbr.second.min, entrymbr.first.max, entrymbr.second.max);
+            global_rtree.Insert(tuplerect.min, tuplerect.max, sec_indexval);
+            rtree_id++;
+          }
         }
       }
 

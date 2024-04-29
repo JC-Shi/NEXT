@@ -229,7 +229,7 @@ int main(int argc, char* argv[]) {
         std::cout << "end writing data" << std::endl;
         std::cout << "Execution time: " << totalDuration.count() << " nanoseconds" << std::endl;
 
-        sleep(90);
+        sleep(600);
         // std::string stats_value;
         // db->GetProperty("rocksdb.stats", &stats_value);
         // std::cout << stats_value << std::endl;
@@ -256,12 +256,15 @@ int main(int argc, char* argv[]) {
 
     delete db;
 
+    // std::cout << "start create second" << std::endl;
+
     // s = DB::Open(options, kDBPath, &db);
-    // // std::string stats_value;
-    // // db->GetProperty("rocksdb.stats", &stats_value);
+    // // std::cout << "Create if missing: " << s.ToString() << std::endl;
+    // std::string stats_value;
+    // db->GetProperty("rocksdb.stats", &stats_value);
     // s = db->Close();
 
-    // // std::cout << stats_value << std::endl;
+    // // // std::cout << stats_value << std::endl;
 
     // std::cout << "RocksDB stats: " << options.statistics->ToString() << std::endl;
 

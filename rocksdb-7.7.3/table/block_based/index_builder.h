@@ -184,6 +184,10 @@ class SecondaryIndexBuilder {
 
   virtual bool seperator_is_key_plus_seq() { return true; }
 
+  virtual void get_Secondary_Entries(std::vector<std::pair<std::string, BlockHandle>>* sec_entries) {
+    (void) sec_entries;
+  }
+
  protected:
   const InternalKeyComparator* comparator_;
   // const Comparator* comparator_;
@@ -934,6 +938,9 @@ class RtreeSecondaryIndexBuilder : public SecondaryIndexBuilder {
       const BlockHandle& last_partition_block_handle) override;
 
   virtual size_t IndexSize() const override { return index_size_; }
+
+  void get_Secondary_Entries(std::vector<std::pair<std::string, BlockHandle>>* sec_entries) override;
+
   size_t TopLevelIndexSize(uint64_t) const { return top_level_index_size_; }
   size_t NumPartitions() const;
 
@@ -984,6 +991,10 @@ class RtreeSecondaryIndexBuilder : public SecondaryIndexBuilder {
   std::list<Entry> entries_;  // list of partitioned indexes and their keys
   std::list<Entry> next_level_entries_;  // list of partitioned indexes and their keys
   std::list<DataBlockEntry> data_block_entries_;
+  std::vector<Mbr> tuple_mbrs_;  // vector of each tuple for secondary index builder
+
+  std::vector<std::pair<std::string, BlockHandle>> sec_entries_;
+
   BlockBuilder index_block_builder_;              // top-level index builder
   // the active partition index builder
   RtreeSecondaryIndexLevelBuilder* sub_index_builder_;
@@ -992,6 +1003,7 @@ class RtreeSecondaryIndexBuilder : public SecondaryIndexBuilder {
   std::unique_ptr<FlushBlockPolicy> flush_policy_;
   // true if Finish is called once but not complete yet.
   bool finishing_indexes = false;
+  bool firstlayer = true;
   const BlockBasedTableOptions& table_opt_;
   bool use_value_delta_encoding_;
   // true if an external entity (such as filter partition builder) request

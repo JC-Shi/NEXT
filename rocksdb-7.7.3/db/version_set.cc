@@ -1949,7 +1949,7 @@ void Version::AddIteratorsForLevel(const ReadOptions& read_options,
     RtreeIteratorContext* context = 
         reinterpret_cast<RtreeIteratorContext*>(read_options.iterator_context);
     Slice query_slice(context->query_mbr);
-    std::vector<std::pair<int, uint64_t>> hittedFiles;
+    std::vector<GlobalSecIndexValue> hittedFiles;
     if (mutable_cf_options_.global_sec_index_is_spatial) {
       Mbr query_mbr = ReadSecQueryMbr(query_slice);
       Rect query_rect(query_mbr.first.min, query_mbr.second.min, query_mbr.first.max, query_mbr.second.max);
@@ -1964,12 +1964,49 @@ void Version::AddIteratorsForLevel(const ReadOptions& read_options,
     // find the level and position of each file and 
     // create the respective table_iter
     TruncatedRangeDelIterator* tombstone_iter = nullptr;
-    int n_hits = static_cast<int>(hittedFiles.size());
-    std::cout << "return hits: " << n_hits << std::endl;    
+    // int n_hits = static_cast<int>(hittedFiles.size());
+    // std::cout << "return hits: " << n_hits << std::endl;    
 
-    for (int i = 0; i < n_hits; i++) {
+    std::map<uint64_t, std::vector<BlockHandle>> filenum_2_blkhandle;
+    std::vector<uint64_t> hitfilenum;
+    for (const GlobalSecIndexValue& hf :hittedFiles){
+      hitfilenum.emplace_back(hf.filenum);
+      filenum_2_blkhandle[hf.filenum].push_back(hf.blkhandle);
+    }
+
+    std::sort(hitfilenum.begin(),hitfilenum.end());
+    hitfilenum.erase(std::unique(hitfilenum.begin(),hitfilenum.end()),hitfilenum.end());
+    // std::cout << "size after: " << static_cast<int>(hitfilenum.size()) << std::endl;
+
+    for (int i = 0; i < static_cast<int>(hitfilenum.size()); i++) {
       // find the file_number of the hitted file
-      uint64_t hfile_number = hittedFiles[i].second;
+      // uint64_t hfile_number = hittedFiles[i].second;
+      uint64_t hfile_number = hitfilenum[i];
+
+      // ReadOptions ros;
+      // ros.snapshot = read_options.snapshot;
+      // ros.iterate_lower_bound = read_options.iterate_lower_bound;
+      // ros.iterate_upper_bound = read_options.iterate_upper_bound;
+      // ros.readahead_size = read_options.readahead_size;
+      // ros.max_skippable_internal_keys = read_options.max_skippable_internal_keys;
+      // ros.fill_cache = read_options.fill_cache;
+      // ros.deadline = read_options.deadline;
+      // ros.io_timeout = read_options.io_timeout;
+      // ros.adaptive_readahead = read_options.adaptive_readahead;
+      // ros.async_io = read_options.async_io;
+      // ros.rate_limiter_priority = read_options.rate_limiter_priority;
+      // ros.iterator_context = read_options.iterator_context;
+      // ros.is_secondary_index_scan = read_options.is_secondary_index_scan;
+      // adding the found sec entries
+
+      for (const BlockHandle& bh: filenum_2_blkhandle[hfile_number]) {
+        uint64_t offset_bh = bh.offset();
+        uint64_t size_bh = bh.size();
+        read_options.found_sec_blkhandle->emplace_back(std::make_pair(offset_bh, size_bh));
+      }
+      // std::cout << "found_sec_blkhandle size: " << read_options.found_sec_blkhandle->size() << std::endl;
+
+     
       // std::cout << "file number:" << hfile_number << std::endl;
       // get the file location
       // file_level: location.GetLevel()
@@ -1992,7 +2029,8 @@ void Version::AddIteratorsForLevel(const ReadOptions& read_options,
       } else {
         merge_iter_builder->AddPointAndTombstoneIterator(table_iter,
                                                         tombstone_iter);
-        }
+        } 
+      read_options.found_sec_blkhandle->clear();       
     }
   } else {
     if (level == 0) {

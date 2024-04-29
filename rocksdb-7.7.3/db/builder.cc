@@ -271,6 +271,11 @@ Status BuildTable(
               ? meta->file_creation_time
               : meta->oldest_ancester_time);
       s = builder->Finish();
+
+      std::vector<std::pair<std::string, BlockHandle>> secondary_index_entries;
+      builder->GetSecondaryEntries(&secondary_index_entries);
+      s = meta->UpdateSecEntries(secondary_index_entries);
+      secondary_index_entries.clear();
     }
     if (io_status->ok()) {
       *io_status = builder->io_status();

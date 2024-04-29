@@ -241,6 +241,8 @@ class BlockBasedTableIterator : public InternalIteratorBase<Slice> {
 
   bool async_read_in_progress_;
 
+  std::set<uint64_t> seen_handles_;
+
   // If `target` is null, seek to first.
   void SeekImpl(const Slice* target, bool async_prefetch);
 
