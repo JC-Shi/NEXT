@@ -231,7 +231,7 @@ int main(int argc, char* argv[]) {
         std::cout << "end writing data" << std::endl;
         std::cout << "Execution time: " << totalDuration.count() << " nanoseconds" << std::endl;
 
-        sleep(90);
+        sleep(300);
         // std::string stats_value;
         // db->GetProperty("rocksdb.stats", &stats_value);
         // std::cout << stats_value << std::endl;

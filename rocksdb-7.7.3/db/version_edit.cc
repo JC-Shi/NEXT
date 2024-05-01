@@ -32,9 +32,16 @@ uint64_t PackFileNumberAndPathId(uint64_t number, uint64_t path_id) {
 Status FileMetaData::UpdateSecEntries(std::vector<std::pair<std::string, BlockHandle>>& SecEntries) {
 
   for(const std::pair<std::string, BlockHandle>& se : SecEntries){
-    Mbr blockmbr = ReadValueMbr(se.first);
+    // std::cout << "sec entries size: " << se.first.size() << std::endl;
     BlockHandle blkhandle = se.second;
-    SecondaryEntries.emplace_back(std::make_pair(blockmbr, blkhandle));
+    if (se.first.size() == 16) {
+      // std::cout << "update value range" << std::endl;
+      ValueRange blockvalrange = ReadValueRange(se.first);
+      SecValrange.emplace_back(std::make_pair(blockvalrange, blkhandle));
+    } else {
+      Mbr blockmbr = ReadValueMbr(se.first);
+      SecondaryEntries.emplace_back(std::make_pair(blockmbr, blkhandle));      
+    }
   }
   
   return Status::OK();
@@ -82,14 +89,10 @@ Status FileMetaData::UpdateBoundaries(const Slice& key, const Slice& value,
   // different meta data shall be used
   // support for different attribute will be added later
 
-  // For 1D numerical value
-  // double numeric_val = *reinterpret_cast<const double*>(value.data());
-  // expandSecValueRangeP(valrange, numeric_val);
-
   // For 2D spatial value
-  Mbr value_mbr = ReadValueMbr(value);
-  expandMbrExcludeIID(mbr, value_mbr);
-  sketch.addMbr(value_mbr);
+  // Mbr value_mbr = ReadValueMbr(value);
+  // expandMbrExcludeIID(mbr, value_mbr);
+  // sketch.addMbr(value_mbr);
 
   return Status::OK();
 }

@@ -901,19 +901,23 @@ void OneDRtreeSecondaryIndexBuilder::OnKeyAdded(const Slice& value){
     double numerical_val = *reinterpret_cast<const double*>(val_temp.data());
     ValueRange temp_val_range;
     temp_val_range.set_range(numerical_val, numerical_val);
-    expandValrange(sub_index_enclosing_valrange_, temp_val_range);
+    // expandValrange(sub_index_enclosing_valrange_, temp_val_range);
+    tuple_valranges_.emplace_back(temp_val_range);
   }
 
 void OneDRtreeSecondaryIndexBuilder::AddIndexEntry(
     std::string* last_key_in_current_block,
     const Slice* first_key_in_next_block, const BlockHandle& block_handle) {
   (void) first_key_in_next_block;
-  DataBlockEntry dbe;
-  dbe.datablockhandle = block_handle;
-  dbe.datablocklastkey = std::string(*last_key_in_current_block);
-  dbe.subindexenclosingvalrange = serializeValueRange(sub_index_enclosing_valrange_);
-  data_block_entries_.push_back(dbe);
-  sub_index_enclosing_valrange_.clear();    
+  std::string datablcoklastkeystr = std::string(*last_key_in_current_block);
+  for (const ValueRange& v: tuple_valranges_) {
+    DataBlockEntry dbe;
+    dbe.datablockhandle = block_handle;
+    dbe.datablocklastkey = datablcoklastkeystr;
+    dbe.subindexenclosingvalrange = serializeValueRange(v);
+    data_block_entries_.push_back(dbe);    
+  }
+  tuple_valranges_.clear();    
 }
 
 void OneDRtreeSecondaryIndexBuilder::AddIdxEntry(DataBlockEntry datablkentry, bool last) {
@@ -946,7 +950,7 @@ void OneDRtreeSecondaryIndexBuilder::AddIdxEntry(DataBlockEntry datablkentry, bo
           flush_policy_->Update(enclosing_valrange_encoding, handle_encoding);
       if (do_flush) {
         // std::cout << "push_back a full sub_index builder" << std::endl;
-        // std::cout << "pushed mbr: " << enclosing_mbr_ << std::endl;
+        // std::cout << "pushed valuerange: " << enclosing_valrange_ << std::endl;
         entries_.push_back(
             {serializeValueRange(enclosing_valrange_),
              std::unique_ptr<OneDRtreeSecondaryIndexLevelBuilder>(sub_index_builder_)});
@@ -1005,6 +1009,10 @@ Status OneDRtreeSecondaryIndexBuilder::Finish(
   if (finishing_indexes == true) {
     Entry& last_entry = entries_.front();
 
+    if (firstlayer == true) {
+      sec_entries_.emplace_back(std::make_pair(last_entry.key, last_partition_block_handle));
+    }
+
     if (sub_index_builder_ != nullptr) {
       std::string handle_encoding;
       last_partition_block_handle.EncodeTo(&handle_encoding);
@@ -1034,6 +1042,7 @@ Status OneDRtreeSecondaryIndexBuilder::Finish(
     // update R-tree height
     rtree_level_++;
 
+    firstlayer = false;
     if (sub_index_builder_ != nullptr){
       next_level_entries_.push_back(
           {serializeValueRange(enclosing_valrange_),
@@ -1047,7 +1056,7 @@ Status OneDRtreeSecondaryIndexBuilder::Finish(
     if (next_level_entries_.size() == 1) {
       Entry& entry = next_level_entries_.front();
       auto s = entry.value->Finish(index_blocks);
-      // std::cout << "writing the top-level index block with enclosing MBR: " << ReadQueryMbr(entry.key) << std::endl;
+      std::cout << "writing the top-level index block with enclosing valuerange: " << ReadValueRange(entry.key) << std::endl;
       index_size_ += index_blocks->index_block_contents.size();
       PutVarint32(&rtree_height_str_, rtree_level_);
       index_blocks->meta_blocks.insert(
@@ -1092,5 +1101,11 @@ Status OneDRtreeSecondaryIndexBuilder::Finish(
 }
 
 size_t OneDRtreeSecondaryIndexBuilder::NumPartitions() const { return partition_cnt_; }
+
+void OneDRtreeSecondaryIndexBuilder::get_Secondary_Entries(
+  std::vector<std::pair<std::string, BlockHandle>>* sec_entries) {
+    *sec_entries = sec_entries_;
+    sec_entries_.clear();
+  }
 
 }  // namespace ROCKSDB_NAMESPACE

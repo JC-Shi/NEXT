@@ -462,7 +462,7 @@ class SkipListSecRep : public SkipListRep {
                 // if query_slice.size == 32: two-d mbr
                 // std::cout << "query slice size: " << query_slice.size() << std::endl;
                 if (query_slice.size() == 16) {
-                  std::cout << "query range initialized" << std::endl;
+                  // std::cout << "query range initialized" << std::endl;
                   query_valrange_ = ReadValueRange(query_slice);
                 } else {
                   query_mbr_ = ReadSecQueryMbr(query_slice);

@@ -49,6 +49,11 @@ class OneDRtreeSecIndexIterator : public InternalIteratorBase<IndexValue> {
           reinterpret_cast<RtreeIteratorContext*>(read_options.iterator_context);
       Slice query_slice(context->query_mbr);
       query_valrange_ = ReadValueRange(query_slice);
+
+      for (const std::pair<uint64_t, u_int64_t>& fsbh: *read_options.found_sec_blkhandle) {
+        found_sec_handles_->emplace_back(fsbh);
+      }
+      sec_blk_iter_ = found_sec_handles_->begin();
       // std::cout << "query_mbr_: " << query_mbr_ << std::endl;
       // std::cout << "rtree_index_iterator rtree_height_: " << rtree_height_ << std::endl;
     }
@@ -169,15 +174,20 @@ class OneDRtreeSecIndexIterator : public InternalIteratorBase<IndexValue> {
   BlockPrefetcher block_prefetcher_;
   ValueRange query_valrange_;
   uint32_t rtree_height_;
+  std::vector<std::pair<uint64_t, uint64_t>>* found_sec_handles_ = new std::vector<std::pair<uint64_t, uint64_t>>();
+  std::vector<std::pair<uint64_t, uint64_t>>::iterator sec_blk_iter_;
   std::stack<StackElement*> iterator_stack_;
 
   // If `target` is null, seek to first.
   void SeekImpl(const Slice* target);
 
   void InitPartitionedIndexBlock(IndexBlockIter* block_iter=nullptr);
+  void InitPartitionedSecIndexBlock();
   void InitRtreeIntermediateIndexBlock(IndexBlockIter* block_iter);
   void InitRtreeIntermediateIndexBlock(IndexBlockIter* input_block_iter, IndexBlockIter* block_iter);
   void FindKeyForward();
+  void FindKeyForwardSec();
+  void FindBlockForwardSec();
   void FindBlockForward();
   void FindKeyBackward();
   void RtreeIndexIterSeekToFirst(IndexBlockIter* block_iter);

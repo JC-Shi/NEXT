@@ -282,7 +282,8 @@ void BlockBasedTableIterator::InitDataBlock() {
     }   
     seen_handles_.insert(data_block_handle.offset());
   } else {
-    std::cout << "filter duplicated" << std::endl;
+    // if datablock handle seen before, do nothing
+    // std::cout << "filter duplicated" << std::endl;
   }
 
 }

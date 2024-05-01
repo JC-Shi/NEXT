@@ -173,7 +173,7 @@ struct FileMetaData {
   // jing
   Mbr mbr;                         // MBR of the SST file
   SpatialSketch sketch;            // spatial sketch of the SST file for cost estimation
-  ValueRange valrange;             // numerical value range of SST file for secondary attribute
+  std::vector<std::pair<ValueRange, BlockHandle>> SecValrange;             // numerical value range of SST file for secondary attribute
   std::vector<std::pair<Mbr, BlockHandle>> SecondaryEntries;  // MBR of the leaf nodes of the per file secondary index
  
   // Needs to be disposed when refs becomes 0.
@@ -280,7 +280,9 @@ struct FileMetaData {
 
   FileMetaData(uint64_t file, uint32_t file_path_id, uint64_t file_size,
                const InternalKey& smallest_key, const InternalKey& largest_key,
-               const Mbr& _mbr, const SpatialSketch& _sketch, const ValueRange& _valrange, 
+               const Mbr& _mbr, const SpatialSketch& _sketch, 
+               const std::vector<std::pair<ValueRange, BlockHandle>>& _SecValrange, 
+               const std::vector<std::pair<Mbr, BlockHandle>>& _SecondaryEntries, 
                const SequenceNumber& smallest_seq,
                const SequenceNumber& largest_seq, bool marked_for_compact,
                Temperature _temperature, uint64_t oldest_blob_file,
@@ -293,34 +295,7 @@ struct FileMetaData {
         largest(largest_key),
         mbr(_mbr),
         sketch(_sketch),
-        valrange(_valrange),
-        marked_for_compaction(marked_for_compact),
-        temperature(_temperature),
-        oldest_blob_file_number(oldest_blob_file),
-        oldest_ancester_time(_oldest_ancester_time),
-        file_creation_time(_file_creation_time),
-        file_checksum(_file_checksum),
-        file_checksum_func_name(_file_checksum_func_name),
-        unique_id(std::move(_unique_id)) {
-    TEST_SYNC_POINT_CALLBACK("FileMetaData::FileMetaData", this);
-  }
-
-  FileMetaData(uint64_t file, uint32_t file_path_id, uint64_t file_size,
-               const InternalKey& smallest_key, const InternalKey& largest_key,
-               const Mbr& _mbr, const SpatialSketch& _sketch, const ValueRange& _valrange, 
-               const std::vector<std::pair<Mbr, BlockHandle>>& _SecondaryEntries, const SequenceNumber& smallest_seq,
-               const SequenceNumber& largest_seq, bool marked_for_compact,
-               Temperature _temperature, uint64_t oldest_blob_file,
-               uint64_t _oldest_ancester_time, uint64_t _file_creation_time,
-               const std::string& _file_checksum,
-               const std::string& _file_checksum_func_name,
-               UniqueId64x2 _unique_id)
-      : fd(file, file_path_id, file_size, smallest_seq, largest_seq),
-        smallest(smallest_key),
-        largest(largest_key),
-        mbr(_mbr),
-        sketch(_sketch),
-        valrange(_valrange),
+        SecValrange(_SecValrange),
         SecondaryEntries(_SecondaryEntries),
         marked_for_compaction(marked_for_compact),
         temperature(_temperature),
@@ -563,35 +538,13 @@ class VersionEdit {
                const std::string& file_checksum,
                const std::string& file_checksum_func_name,
                const UniqueId64x2& unique_id, Mbr mbr, SpatialSketch sketch,
-               ValueRange valrange) {
+               std::vector<std::pair<ValueRange, BlockHandle>> SecValrange, 
+               std::vector<std::pair<Mbr, BlockHandle>> SecondaryEntries) {
     assert(smallest_seqno <= largest_seqno);
     new_files_.emplace_back(
         level,
         FileMetaData(file, file_path_id, file_size, smallest, largest, mbr, sketch,
-                     valrange, smallest_seqno, largest_seqno, marked_for_compaction,
-                     temperature, oldest_blob_file_number, oldest_ancester_time,
-                     file_creation_time, file_checksum, file_checksum_func_name,
-                     unique_id));
-    if (!HasLastSequence() || largest_seqno > GetLastSequence()) {
-      SetLastSequence(largest_seqno);
-    }
-  }
-
-  void AddFile(int level, uint64_t file, uint32_t file_path_id,
-               uint64_t file_size, const InternalKey& smallest,
-               const InternalKey& largest, const SequenceNumber& smallest_seqno,
-               const SequenceNumber& largest_seqno, bool marked_for_compaction,
-               Temperature temperature, uint64_t oldest_blob_file_number,
-               uint64_t oldest_ancester_time, uint64_t file_creation_time,
-               const std::string& file_checksum,
-               const std::string& file_checksum_func_name,
-               const UniqueId64x2& unique_id, Mbr mbr, SpatialSketch sketch,
-               ValueRange valrange, std::vector<std::pair<Mbr, BlockHandle>> SecondaryEntries) {
-    assert(smallest_seqno <= largest_seqno);
-    new_files_.emplace_back(
-        level,
-        FileMetaData(file, file_path_id, file_size, smallest, largest, mbr, sketch,
-                     valrange, SecondaryEntries, smallest_seqno, largest_seqno, marked_for_compaction,
+                     SecValrange, SecondaryEntries, smallest_seqno, largest_seqno, marked_for_compaction,
                      temperature, oldest_blob_file_number, oldest_ancester_time,
                      file_creation_time, file_checksum, file_checksum_func_name,
                      unique_id));
