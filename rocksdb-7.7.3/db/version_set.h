@@ -1087,7 +1087,7 @@ class Version {
   // TODO(Jiachen) setting the variable based on the sec index type
   // Currently this may be mannually adjusted
   // (SecIndexType) Manually Changed is needed here
-  typedef RTree<GlobalSecIndexValue, double, 1, double> GlobalSecRtree;
+  typedef RTree<GlobalSecIndexValue, double, 2, double> GlobalSecRtree;
   GlobalSecRtree global_rtree_;
 
   // A version number that uniquely represents this version. This is

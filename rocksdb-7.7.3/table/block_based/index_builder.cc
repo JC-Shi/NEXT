@@ -695,10 +695,16 @@ Status RtreeSecondaryIndexBuilder::Finish(
       Mbr b_mbr = ReadSecQueryMbr(b.subindexenclosingmbr);
 
       // defining z-curve based on grid cells on data space
-      double x_min = -12.2304942;
-      double x_max = 37.4497039;
-      double y_min = 50.0218541;
-      double y_max = 125.9548288;
+      // for dataset india
+      // double x_min = -12.2304942;
+      // double x_max = 37.4497039;
+      // double y_min = 50.0218541;
+      // double y_max = 125.9548288;
+      // for dataset buildings
+      double x_min = -179.7582827;
+      double x_max = 179.8440789;
+      double y_min = -89.9678358;
+      double y_max = 82.5114551;
       int n = 8192;
 
       // using the centre point of each mbr for z-value computation
@@ -727,7 +733,7 @@ Status RtreeSecondaryIndexBuilder::Finish(
     // std::cout << "data block entries size: " << data_block_entries_.size() << std::endl;
     for (it = data_block_entries_.begin(); it != data_block_entries_.end(); ++it) {
       if (it == --data_block_entries_.end()) {
-        std::cout << "last entry added" << std::endl;
+        // std::cout << "last entry added" << std::endl;
         // count++;
         AddIdxEntry(*it, true);
       } else {
@@ -738,7 +744,7 @@ Status RtreeSecondaryIndexBuilder::Finish(
     }
     // AddIdxEntry(last_index_entry_, true);
     // std::cout << "count number: " << count << std::endl;
-    std::cout << "entries_ size: " << entries_.size() << std::endl;
+    // std::cout << "entries_ size: " << entries_.size() << std::endl;
   }
   
   if (partition_cnt_ == 0) {
@@ -824,7 +830,7 @@ Status RtreeSecondaryIndexBuilder::Finish(
     finishing_indexes = true;
 
     next_level_entries_.clear();
-    std::cout << "swapped next_level_entries and entries_, entries size: " << entries_.size() << std::endl;
+    // std::cout << "swapped next_level_entries and entries_, entries size: " << entries_.size() << std::endl;
 
     return Status::Incomplete();
 
@@ -988,7 +994,7 @@ Status OneDRtreeSecondaryIndexBuilder::Finish(
     // std::cout << "data block entries size: " << data_block_entries_.size() << std::endl;
     for (it = data_block_entries_.begin(); it != data_block_entries_.end(); ++it) {
       if (it == --data_block_entries_.end()) {
-        std::cout << "last entry added" << std::endl;
+        // std::cout << "last entry added" << std::endl;
         // count++;
         AddIdxEntry(*it, true);
       } else {
@@ -999,7 +1005,7 @@ Status OneDRtreeSecondaryIndexBuilder::Finish(
     }
     // AddIdxEntry(last_index_entry_, true);
     // std::cout << "count number: " << count << std::endl;
-    std::cout << "entries_ size: " << entries_.size() << std::endl;
+    // std::cout << "entries_ size: " << entries_.size() << std::endl;
   }
   
   if (partition_cnt_ == 0) {
@@ -1056,7 +1062,7 @@ Status OneDRtreeSecondaryIndexBuilder::Finish(
     if (next_level_entries_.size() == 1) {
       Entry& entry = next_level_entries_.front();
       auto s = entry.value->Finish(index_blocks);
-      std::cout << "writing the top-level index block with enclosing valuerange: " << ReadValueRange(entry.key) << std::endl;
+      // std::cout << "writing the top-level index block with enclosing valuerange: " << ReadValueRange(entry.key) << std::endl;
       index_size_ += index_blocks->index_block_contents.size();
       PutVarint32(&rtree_height_str_, rtree_level_);
       index_blocks->meta_blocks.insert(
@@ -1078,7 +1084,7 @@ Status OneDRtreeSecondaryIndexBuilder::Finish(
     finishing_indexes = true;
 
     next_level_entries_.clear();
-    std::cout << "swapped next_level_entries and entries_, entries size: " << entries_.size() << std::endl;
+    // std::cout << "swapped next_level_entries and entries_, entries size: " << entries_.size() << std::endl;
 
     return Status::Incomplete();
 

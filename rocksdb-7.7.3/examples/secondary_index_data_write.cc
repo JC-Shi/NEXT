@@ -23,14 +23,14 @@
 
 using namespace rocksdb;
 
-std::string serialize_key(uint64_t iid, double xValue, double yValue) {
+std::string serialize_key(uint64_t iid, double xValueMin, double xValueMax, double yValueMin, double yValueMax) {
     std::string key;
     // The R-tree stores boxes, hence duplicate the input values
     key.append(reinterpret_cast<const char*>(&iid), sizeof(uint64_t));
-    key.append(reinterpret_cast<const char*>(&xValue), sizeof(double));
-    key.append(reinterpret_cast<const char*>(&xValue), sizeof(double));
-    key.append(reinterpret_cast<const char*>(&yValue), sizeof(double));
-    key.append(reinterpret_cast<const char*>(&yValue), sizeof(double));
+    key.append(reinterpret_cast<const char*>(&xValueMin), sizeof(double));
+    key.append(reinterpret_cast<const char*>(&xValueMax), sizeof(double));
+    key.append(reinterpret_cast<const char*>(&yValueMin), sizeof(double));
+    key.append(reinterpret_cast<const char*>(&yValueMax), sizeof(double));
     return key;
 }
 
@@ -40,13 +40,13 @@ std::string serialize_id(int iid) {
     return key;
 }
 
-std::string serialize_value(double xValue, double yValue) {
+std::string serialize_value(double xValueMin, double xValueMax, double yValueMin, double yValueMax) {
     std::string val;
     // The R-tree stores boxes, hence duplicate the input values
-    val.append(reinterpret_cast<const char*>(&xValue), sizeof(double));
-    val.append(reinterpret_cast<const char*>(&xValue), sizeof(double));
-    val.append(reinterpret_cast<const char*>(&yValue), sizeof(double));
-    val.append(reinterpret_cast<const char*>(&yValue), sizeof(double));
+    val.append(reinterpret_cast<const char*>(&xValueMin), sizeof(double));
+    val.append(reinterpret_cast<const char*>(&xValueMax), sizeof(double));
+    val.append(reinterpret_cast<const char*>(&yValueMin), sizeof(double));
+    val.append(reinterpret_cast<const char*>(&yValueMax), sizeof(double));
     return val;
 }
 
@@ -103,10 +103,10 @@ public:
         // } else {
         //     return 0;
         // }
-        return slice_a.compare(slice_b);
+        // return slice_a.compare(slice_b);
 
         // // Specifically for R-tree as r-tree does not implement ordering
-        // return 1;
+        return 1;
     }
 
     void FindShortestSeparator(std::string* start,
@@ -136,7 +136,7 @@ int main(int argc, char* argv[]) {
     options.comparator = &cmp;
 
     options.info_log_level = DEBUG_LEVEL;
-    // options.statistics = rocksdb::CreateDBStatistics();
+    options.statistics = rocksdb::CreateDBStatistics();
     // options.compaction_pri = kMinMbr;
     // std::cout << "compatction_pri = " << options.compaction_pri << std::endl;
     // options.stats_dump_period_sec = 5;
@@ -201,26 +201,57 @@ int main(int argc, char* argv[]) {
         std::cout << "start writing data" << std::endl;
         // auto totalDuration = std::chrono::duration<long long, std::milli>(0);
         std::chrono::nanoseconds totalDuration{0};
-        for (int i = 0; i < dataSize; i++){
-            dataFile >> op >> id >> low[0] >> low[1] >> high[0] >> high[1];
-            // if (i < 50) {
-            //     std::cout << op << " " << id << " " << low[0] << " " << low[1] << " " << high[0] << " " << high[1] << std::endl;
-            // }
-            // std::string key = serialize_key(id, low[0], low[1]);
-            std::string key = serialize_id(id);
-            std::string value = serialize_value(low[0], low[1]);
 
-            // std::cout << "In Key: " << id << low[0] << low[1] << std::endl;
-            // Put key-value
+        std::string line;
+        int lineCount = 0;
+        while(std::getline(dataFile, line)) {
+            if(lineCount == dataSize){
+                break;
+            }
+            lineCount++;
+            std::string token;
+            std::istringstream ss(line);
+
+            ss >> id >> low[0] >> low[1] >> high[0] >> high[1];
+
+            std::string key = serialize_id(id);
+            std::string value = serialize_value(low[0], high[0], low[1], high[1]);
+
+            while(std::getline(ss, token, '\t')) {
+                value += token + "\t";
+            }
+            if(!value.empty() && value.back() == ' ') {
+                value.pop_back();
+            }
+
             auto start = std::chrono::high_resolution_clock::now();
             s = db->Put(WriteOptions(), key, value);
             // std::cout << "write first data" << std::endl;
             auto end = std::chrono::high_resolution_clock::now(); 
             auto duration = std::chrono::duration_cast<std::chrono::nanoseconds>(end - start);
             totalDuration = totalDuration + duration;
-            // std::cout << "In Status: " << s.ToString() << std::endl;
-            // assert(s.ok());
         }
+
+        // for (int i = 0; i < dataSize; i++){
+            
+        //     dataFile >> op >> id >> low[0] >> low[1] >> high[0] >> high[1];
+            
+        //     std::string key = serialize_id(id);
+        //     std::string value = serialize_value(low[0], low[1]);
+
+        //     // std::cout << "In Key: " << id << low[0] << low[1] << std::endl;
+        //     // Put key-value
+        //     auto start = std::chrono::high_resolution_clock::now();
+        //     s = db->Put(WriteOptions(), key, value);
+        //     // std::cout << "write first data" << std::endl;
+        //     auto end = std::chrono::high_resolution_clock::now(); 
+        //     auto duration = std::chrono::duration_cast<std::chrono::nanoseconds>(end - start);
+        //     totalDuration = totalDuration + duration;
+        //     // std::cout << "In Status: " << s.ToString() << std::endl;
+        //     // assert(s.ok());
+        // }
+
+        
         std::cout << "Status: " << s.ToString() << std::endl;
         assert(s.ok());
 
@@ -229,16 +260,16 @@ int main(int argc, char* argv[]) {
         std::cout << "end writing data" << std::endl;
         std::cout << "Execution time: " << totalDuration.count() << " nanoseconds" << std::endl;
 
-        sleep(600);
-        // std::string stats_value;
-        // db->GetProperty("rocksdb.stats", &stats_value);
-        // std::cout << stats_value << std::endl;
+        sleep(900);
+        std::string stats_value;
+        db->GetProperty("rocksdb.stats", &stats_value);
+        std::cout << stats_value << std::endl;
 
         db->Close();
 
 
 
-        // std::cout << "RocksDB stats: " << options.statistics->ToString() << std::endl;
+        std::cout << "RocksDB stats: " << options.statistics->ToString() << std::endl;
 
         // std::string key1 = serialize_key(0, 516, 22.214);
         // std::cout << "key1: " << key1 << std::endl;

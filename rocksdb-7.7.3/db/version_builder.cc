@@ -911,7 +911,7 @@ class VersionBuilder::Rep {
     // A global secondary rtree will be initiated by load from current file
     // then changes of files will be applied on the rtree and save it back
     // (SecIndexType) Manually Changed is needed here
-    typedef RTree<GlobalSecIndexValue, double, 1, double> GlobalSecRtree;
+    typedef RTree<GlobalSecIndexValue, double, 2, double> GlobalSecRtree;
     GlobalSecRtree global_rtree;    
     if (ioptions_->global_sec_index) {
       global_rtree.Load(ioptions_->global_index_loc);

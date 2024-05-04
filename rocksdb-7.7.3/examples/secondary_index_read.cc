@@ -3,6 +3,7 @@
 #include <string>
 #include <fstream>
 #include <iostream>
+#include <fstream>
 #include <unistd.h>
 #include <sstream>
 #include <vector>
@@ -127,6 +128,9 @@ public:
 
 int main(int argc, char* argv[]) {
 
+    std::ofstream logfile;
+    logfile.open("/home/jiachen001/sdd/rocksdb/db_storage/buildings_2D_01res.txt");
+
     std::string kDBPath = argv[1];
     int querySize = int(atoi(argv[2]));
     std::ifstream queryFile(argv[3]);
@@ -194,7 +198,9 @@ int main(int argc, char* argv[]) {
         auto end = std::chrono::high_resolution_clock::now(); 
         auto duration = std::chrono::duration_cast<std::chrono::nanoseconds>(end - start);
         totalDuration = totalDuration + duration;
-        std::cout << "Total number of results: " << counter << std::endl;        
+        std::cout << "Total number of results: " << counter << std::endl;     
+        logfile << "Total number of results: " << counter << "\n";   
+        logfile << "Query Duration: " << duration.count() << "\n";
     }
     std::cout << "Execution time: " << totalDuration.count() << " nanoseconds" << std::endl;
 

@@ -1689,7 +1689,7 @@ void BlockBasedTableBuilder::WriteSecIndexBlock(
   if (!ok()) {
     return;
   }
-  std::cout << "enter writesecindexblock" << std::endl;
+  // std::cout << "enter writesecindexblock" << std::endl;
   if (rep_->table_options.create_secondary_index == true) {
     SecondaryIndexBuilder::IndexBlocks sec_index_blocks; 
     BlockHandle sec_index_block_handle;
