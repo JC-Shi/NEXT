@@ -78,10 +78,10 @@ public:
         //     return 0;
         // }
 
-        // return slice_a.compare(slice_b);
+        return slice_a.compare(slice_b);
 
         // // Specifically for R-tree as r-tree does not implement ordering
-        return 1;
+        // return 1;
     }
 
     void FindShortestSeparator(std::string* start,
@@ -139,21 +139,22 @@ int main(int argc, char* argv[]) {
 
     uint32_t id;
     uint32_t op;
-    double low[2], high[2];
+    double low[2];
 
     rocksdb::ReadOptions read_options;
     rocksdb::RtreeIteratorContext iterator_context;
 
     std::chrono::nanoseconds totalDuration{0};
     for (int i=0; i<querySize;i++) {
-        queryFile >> op >> id >> low[0] >> low[1] >> high[0] >> high[1];
+        queryFile >> low[0] >> low[1];
 
         auto start = std::chrono::high_resolution_clock::now();
         iterator_context.query_mbr = 
-                serialize_query(low[0], high[0]);
+                serialize_query(low[0], low[1]);
         read_options.iterator_context = &iterator_context;
         read_options.is_secondary_index_scan = true;
         read_options.is_secondary_index_spatial = false;
+        read_options.async_io = true;
         // std::cout << "create newiterator" << std::endl;
         std::unique_ptr <rocksdb::Iterator> it(db->NewIterator(read_options));
         // std::cout << "created New iterator" << std::endl;
@@ -166,7 +167,8 @@ int main(int argc, char* argv[]) {
         auto end = std::chrono::high_resolution_clock::now(); 
         auto duration = std::chrono::duration_cast<std::chrono::nanoseconds>(end - start);
         totalDuration = totalDuration + duration;
-        std::cout << "Total number of results: " << counter << std::endl;        
+        std::cout << "Total number of results: " << counter << std::endl;     
+        std::cout << "Query Duration: " << duration.count() << " nanoseconds" << std::endl;   
     }
     std::cout << "Execution time: " << totalDuration.count() << " nanoseconds" << std::endl;
 

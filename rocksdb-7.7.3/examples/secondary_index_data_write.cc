@@ -103,10 +103,10 @@ public:
         // } else {
         //     return 0;
         // }
-        // return slice_a.compare(slice_b);
+        return slice_a.compare(slice_b);
 
         // // Specifically for R-tree as r-tree does not implement ordering
-        return 1;
+        // return 1;
     }
 
     void FindShortestSeparator(std::string* start,
@@ -137,6 +137,9 @@ int main(int argc, char* argv[]) {
 
     options.info_log_level = DEBUG_LEVEL;
     options.statistics = rocksdb::CreateDBStatistics();
+
+    options.max_write_buffer_number = 5;
+    options.max_background_jobs = 8;
     // options.compaction_pri = kMinMbr;
     // std::cout << "compatction_pri = " << options.compaction_pri << std::endl;
     // options.stats_dump_period_sec = 5;
@@ -260,7 +263,7 @@ int main(int argc, char* argv[]) {
         std::cout << "end writing data" << std::endl;
         std::cout << "Execution time: " << totalDuration.count() << " nanoseconds" << std::endl;
 
-        sleep(900);
+        sleep(1200);
         std::string stats_value;
         db->GetProperty("rocksdb.stats", &stats_value);
         std::cout << stats_value << std::endl;

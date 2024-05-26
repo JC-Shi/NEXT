@@ -13,6 +13,8 @@
 
 #include "rocksdb/file_system.h"
 #include "rocksdb/slice_transform.h"
+#include "util/RTree_mem.h"
+#include "util/rtree.h"
 
 namespace ROCKSDB_NAMESPACE {
 
@@ -32,6 +34,7 @@ class CacheReservationManager;
 // Versions that contain full copies of the intermediate state.
 class VersionBuilder {
  public:
+  typedef RTree<GlobalSecIndexValue, double, 1, double> GlobalSecRtree; 
   VersionBuilder(const FileOptions& file_options,
                  const ImmutableCFOptions* ioptions, TableCache* table_cache,
                  VersionStorageInfo* base_vstorage, VersionSet* version_set,
@@ -41,6 +44,7 @@ class VersionBuilder {
 
   bool CheckConsistencyForNumLevels();
   Status Apply(const VersionEdit* edit);
+  Status Apply(const VersionEdit* edit, GlobalSecRtree* global_rtree_p);
   Status SaveTo(VersionStorageInfo* vstorage) const;
   Status LoadTableHandlers(
       InternalStats* internal_stats, int max_threads,

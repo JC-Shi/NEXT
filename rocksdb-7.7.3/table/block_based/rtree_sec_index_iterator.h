@@ -181,6 +181,8 @@ class RtreeSecIndexIterator : public InternalIteratorBase<IndexValue> {
 
   std::stack<StackElement*> iterator_stack_;
 
+  // Mbr block_iter_mbr_;
+
   // If `target` is null, seek to first.
   void SeekImpl(const Slice* target);
 

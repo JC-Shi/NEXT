@@ -638,6 +638,16 @@ void RtreeSecondaryIndexBuilder::AddIndexEntry(
 
 void RtreeSecondaryIndexBuilder::AddIdxEntry(DataBlockEntry datablkentry, bool last) {
   expandMbrExcludeIID(enclosing_mbr_, ReadSecQueryMbr(datablkentry.subindexenclosingmbr));
+
+  expandMbrExcludeIID(temp_sec_mbr_, ReadSecQueryMbr(datablkentry.subindexenclosingmbr));
+  if (GetMbrArea(temp_sec_mbr_) > 0.005 && !sec_enclosing_mbr_.empty()) {
+    sec_mbrs_.emplace_back(serializeMbrExcludeIID(sec_enclosing_mbr_));
+    sec_enclosing_mbr_.clear();
+    temp_sec_mbr_.clear();
+    expandMbrExcludeIID(temp_sec_mbr_, ReadSecQueryMbr(datablkentry.subindexenclosingmbr));
+  }
+
+  expandMbrExcludeIID(sec_enclosing_mbr_, ReadSecQueryMbr(datablkentry.subindexenclosingmbr));
   // std::cout << "enclosing_mbr_: " << enclosing_mbr_ << std::endl;
   // Note: to avoid two consecuitive flush in the same method call, we do not
   // check flush policy when adding the last key
@@ -650,9 +660,22 @@ void RtreeSecondaryIndexBuilder::AddIdxEntry(DataBlockEntry datablkentry, bool l
     // std::cout << "pushed mbr: " << enclosing_mbr_ << std::endl;
     sub_index_last_key_ = serializeMbrExcludeIID(enclosing_mbr_);
     // std::cout << "push_back the last sub_index builder" << std::endl;
+
+    // if (GetMbrArea(sec_enclosing_mbr_) > 0.0005) {
+    //   std::cout << "big mbr found: " << sec_enclosing_mbr_ << std::endl;
+    // } else {
+    //   std::cout << "small mbr" << std::endl;
+    // }
+
+    sec_mbrs_.emplace_back(serializeMbrExcludeIID(sec_enclosing_mbr_));
+    sec_enclosing_mbr_.clear();
+    temp_sec_mbr_.clear();
+
     entries_.push_back(
         {serializeMbrExcludeIID(enclosing_mbr_),
-         std::unique_ptr<RtreeSecondaryIndexLevelBuilder>(sub_index_builder_)});
+         std::unique_ptr<RtreeSecondaryIndexLevelBuilder>(sub_index_builder_),
+         sec_mbrs_});
+    sec_mbrs_.clear();
     enclosing_mbr_.clear();
     sub_index_builder_ = nullptr;
     cut_filter_block = true;
@@ -667,11 +690,24 @@ void RtreeSecondaryIndexBuilder::AddIdxEntry(DataBlockEntry datablkentry, bool l
           partition_cut_requested_ ||
           flush_policy_->Update(enclosing_mbr_encoding, handle_encoding);
       if (do_flush) {
+        // std::cout << "flush with enclosing mbr: " << sec_enclosing_mbr_ << std::endl;
         // std::cout << "push_back a full sub_index builder" << std::endl;
         // std::cout << "pushed mbr: " << enclosing_mbr_ << std::endl;
+
+        // if (GetMbrArea(sec_enclosing_mbr_) > 0.0005) {
+        //   std::cout << "big mbr found: " << sec_enclosing_mbr_ << std::endl;
+        // } else {
+        //   std::cout << "small mbr" << std::endl;
+        // }
+
+        sec_mbrs_.emplace_back(serializeMbrExcludeIID(sec_enclosing_mbr_));
+        sec_enclosing_mbr_.clear();
+        temp_sec_mbr_.clear();
         entries_.push_back(
             {serializeMbrExcludeIID(enclosing_mbr_),
-             std::unique_ptr<RtreeSecondaryIndexLevelBuilder>(sub_index_builder_)});
+             std::unique_ptr<RtreeSecondaryIndexLevelBuilder>(sub_index_builder_),
+             sec_mbrs_});
+        sec_mbrs_.clear();
         enclosing_mbr_.clear();
         sub_index_builder_ = nullptr;
       }
@@ -705,7 +741,7 @@ Status RtreeSecondaryIndexBuilder::Finish(
       double x_max = 179.8440789;
       double y_min = -89.9678358;
       double y_max = 82.5114551;
-      int n = 8192;
+      int n = 262144;
 
       // using the centre point of each mbr for z-value computation
       double x_a = (a_mbr.first.min + a_mbr.first.max) / 2;
@@ -756,7 +792,10 @@ Status RtreeSecondaryIndexBuilder::Finish(
   if (finishing_indexes == true) {
     Entry& last_entry = entries_.front();
     if (firstlayer == true) {
-      sec_entries_.emplace_back(std::make_pair(last_entry.key, last_partition_block_handle));      
+      for (const std::string& sec_mbr_s: last_entry.sec_value) {
+        sec_entries_.emplace_back(std::make_pair(sec_mbr_s, last_partition_block_handle));
+      }
+      // sec_entries_.emplace_back(std::make_pair(last_entry.key, last_partition_block_handle));      
     }
 
     if (sub_index_builder_ != nullptr) {
@@ -931,6 +970,17 @@ void OneDRtreeSecondaryIndexBuilder::AddIdxEntry(DataBlockEntry datablkentry, bo
   // std::cout << "enclosing_mbr_: " << enclosing_mbr_ << std::endl;
   // Note: to avoid two consecuitive flush in the same method call, we do not
   // check flush policy when adding the last key
+
+  expandValrange(temp_sec_valrange_, ReadValueRange(datablkentry.subindexenclosingvalrange));
+  if (temp_sec_valrange_.range.max-temp_sec_valrange_.range.min > 0.005 && !sec_enclosing_valrange_.empty()) {
+    sec_valranges_.emplace_back(serializeValueRange(sec_enclosing_valrange_));
+    sec_enclosing_valrange_.clear();
+    temp_sec_valrange_.clear();
+    expandValrange(temp_sec_valrange_, ReadValueRange(datablkentry.subindexenclosingvalrange));
+  }
+
+  expandValrange(sec_enclosing_valrange_, ReadValueRange(datablkentry.subindexenclosingvalrange));
+
   if (UNLIKELY(last == true)) {  // no more keys
     if (sub_index_builder_ == nullptr) {
       MakeNewSubIndexBuilder();
@@ -938,9 +988,16 @@ void OneDRtreeSecondaryIndexBuilder::AddIdxEntry(DataBlockEntry datablkentry, bo
     sub_index_builder_->AddIndexEntry(datablkentry.datablockhandle, datablkentry.subindexenclosingvalrange);
 
     sub_index_last_key_ = serializeValueRange(enclosing_valrange_);
+
+    sec_valranges_.emplace_back(serializeValueRange(sec_enclosing_valrange_));
+    sec_enclosing_valrange_.clear();
+    temp_sec_valrange_.clear();
+
     entries_.push_back(
         {serializeValueRange(enclosing_valrange_),
-         std::unique_ptr<OneDRtreeSecondaryIndexLevelBuilder>(sub_index_builder_)});
+         std::unique_ptr<OneDRtreeSecondaryIndexLevelBuilder>(sub_index_builder_),
+         sec_valranges_});
+    sec_valranges_.clear();
     enclosing_valrange_.clear();
     sub_index_builder_ = nullptr;
     cut_filter_block = true;
@@ -955,11 +1012,18 @@ void OneDRtreeSecondaryIndexBuilder::AddIdxEntry(DataBlockEntry datablkentry, bo
           partition_cut_requested_ ||
           flush_policy_->Update(enclosing_valrange_encoding, handle_encoding);
       if (do_flush) {
+
+        sec_valranges_.emplace_back(serializeValueRange(sec_enclosing_valrange_));
+        sec_enclosing_valrange_.clear();
+        temp_sec_valrange_.clear();
+
         // std::cout << "push_back a full sub_index builder" << std::endl;
         // std::cout << "pushed valuerange: " << enclosing_valrange_ << std::endl;
         entries_.push_back(
             {serializeValueRange(enclosing_valrange_),
-             std::unique_ptr<OneDRtreeSecondaryIndexLevelBuilder>(sub_index_builder_)});
+             std::unique_ptr<OneDRtreeSecondaryIndexLevelBuilder>(sub_index_builder_),
+             sec_valranges_});
+        sec_valranges_.clear();
         enclosing_valrange_.clear();
         sub_index_builder_ = nullptr;
       }
@@ -1016,7 +1080,10 @@ Status OneDRtreeSecondaryIndexBuilder::Finish(
     Entry& last_entry = entries_.front();
 
     if (firstlayer == true) {
-      sec_entries_.emplace_back(std::make_pair(last_entry.key, last_partition_block_handle));
+      for (const std::string& sec_val_s: last_entry.sec_value){
+        sec_entries_.emplace_back(std::make_pair(sec_val_s, last_partition_block_handle));
+      }
+      // sec_entries_.emplace_back(std::make_pair(last_entry.key, last_partition_block_handle));
     }
 
     if (sub_index_builder_ != nullptr) {

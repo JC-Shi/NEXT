@@ -1953,11 +1953,11 @@ void Version::AddIteratorsForLevel(const ReadOptions& read_options,
     if (mutable_cf_options_.global_sec_index_is_spatial) {
       Mbr query_mbr = ReadSecQueryMbr(query_slice);
       Rect query_rect(query_mbr.first.min, query_mbr.second.min, query_mbr.first.max, query_mbr.second.max);
-      hittedFiles = global_rtree_.Search(query_rect.min, query_rect.max, GlobalRTreeCallback);
+      hittedFiles = global_rtree_->Search(query_rect.min, query_rect.max, GlobalRTreeCallback);
     } else {
       ValueRange query_valrange = ReadValueRange(query_slice);
       Rect1D query_rect1D(query_valrange.range.min, query_valrange.range.max);
-      hittedFiles = global_rtree_.Search(query_rect1D.min, query_rect1D.max, GlobalRTreeCallback);
+      hittedFiles = global_rtree_->Search(query_rect1D.min, query_rect1D.max, GlobalRTreeCallback);
     }
 
     // iterating through the return vector
@@ -1970,40 +1970,36 @@ void Version::AddIteratorsForLevel(const ReadOptions& read_options,
     std::map<uint64_t, std::vector<BlockHandle>> filenum_2_blkhandle;
     std::vector<uint64_t> hitfilenum;
     for (const GlobalSecIndexValue& hf :hittedFiles){
-      hitfilenum.emplace_back(hf.filenum);
-      filenum_2_blkhandle[hf.filenum].push_back(hf.blkhandle);
+      // hitfilenum.emplace_back(hf.filenum);
+      filenum_2_blkhandle[hf.filenum].emplace_back(hf.blkhandle);
     }
 
-    std::sort(hitfilenum.begin(),hitfilenum.end());
-    hitfilenum.erase(std::unique(hitfilenum.begin(),hitfilenum.end()),hitfilenum.end());
-    // std::cout << "size after: " << static_cast<int>(hitfilenum.size()) << std::endl;
+    // std::sort(hitfilenum.begin(),hitfilenum.end());
+    // hitfilenum.erase(std::unique(hitfilenum.begin(),hitfilenum.end()),hitfilenum.end());
+    // std::cout << "Found file number: " << static_cast<int>(hitfilenum.size()) << std::endl;
 
-    for (int i = 0; i < static_cast<int>(hitfilenum.size()); i++) {
+    std::set<std::pair<uint64_t, u_int64_t>> seenBlkHandle;
+
+    for (std::map<uint64_t, std::vector<BlockHandle>>::iterator mit = filenum_2_blkhandle.begin(); mit != filenum_2_blkhandle.end(); ++mit) {
+    // for (int i = 0; i < static_cast<int>(hitfilenum.size()); i++) {
       // find the file_number of the hitted file
       // uint64_t hfile_number = hittedFiles[i].second;
-      uint64_t hfile_number = hitfilenum[i];
+      // uint64_t hfile_number = hitfilenum[i];
+      uint64_t hfile_number = mit->first;
 
-      // ReadOptions ros;
-      // ros.snapshot = read_options.snapshot;
-      // ros.iterate_lower_bound = read_options.iterate_lower_bound;
-      // ros.iterate_upper_bound = read_options.iterate_upper_bound;
-      // ros.readahead_size = read_options.readahead_size;
-      // ros.max_skippable_internal_keys = read_options.max_skippable_internal_keys;
-      // ros.fill_cache = read_options.fill_cache;
-      // ros.deadline = read_options.deadline;
-      // ros.io_timeout = read_options.io_timeout;
-      // ros.adaptive_readahead = read_options.adaptive_readahead;
-      // ros.async_io = read_options.async_io;
-      // ros.rate_limiter_priority = read_options.rate_limiter_priority;
-      // ros.iterator_context = read_options.iterator_context;
-      // ros.is_secondary_index_scan = read_options.is_secondary_index_scan;
-      // adding the found sec entries
-
-      for (const BlockHandle& bh: filenum_2_blkhandle[hfile_number]) {
+      // for (const BlockHandle& bh: filenum_2_blkhandle[hfile_number]) {
+      for (const BlockHandle& bh: mit->second) {
         uint64_t offset_bh = bh.offset();
         uint64_t size_bh = bh.size();
-        read_options.found_sec_blkhandle->emplace_back(std::make_pair(offset_bh, size_bh));
+        if (seenBlkHandle.find(std::make_pair(offset_bh, size_bh)) != seenBlkHandle.end()) {
+          continue;
+        } else {
+          read_options.found_sec_blkhandle->emplace_back(std::make_pair(offset_bh, size_bh));
+          seenBlkHandle.insert(std::make_pair(offset_bh, size_bh));
+        }
+        // read_options.found_sec_blkhandle->emplace_back(std::make_pair(offset_bh, size_bh));
       }
+      seenBlkHandle.clear();
       // std::cout << "found_sec_blkhandle size: " << read_options.found_sec_blkhandle->size() << std::endl;
 
      
@@ -2236,7 +2232,8 @@ Version::Version(ColumnFamilyData* column_family_data, VersionSet* vset,
         if (mutable_cf_options.create_global_sec_index) {
           // TODO(Jiachen) based on the secondary index type
           // the global_sec_index shall load different files
-          global_rtree_.Load(mutable_cf_options.global_sec_index_loc);
+          // global_rtree_.Load(mutable_cf_options.global_sec_index_loc);
+          global_rtree_ = &vset->global_rtree_;
         }
       }
 
@@ -5366,7 +5363,9 @@ VersionSet::VersionSet(const std::string& dbname,
       file_options_(storage_options),
       block_cache_tracer_(block_cache_tracer),
       io_tracer_(io_tracer),
-      db_session_id_(db_session_id) {}
+      db_session_id_(db_session_id) {
+        global_rtree_.Load(global_rtree_loc_);
+      }
 
 VersionSet::~VersionSet() {
   // we need to delete column_family_set_ because its destructor depends on
@@ -5381,6 +5380,8 @@ VersionSet::~VersionSet() {
   }
   obsolete_files_.clear();
   io_status_.PermitUncheckedError();
+
+  global_rtree_.Save(global_rtree_loc_);
 }
 
 void VersionSet::Reset() {
@@ -5412,6 +5413,7 @@ void VersionSet::Reset() {
   obsolete_files_.clear();
   obsolete_manifests_.clear();
   wals_.Reset();
+  global_rtree_.Load(global_rtree_loc_);
 }
 
 void VersionSet::AppendVersion(ColumnFamilyData* column_family_data,
@@ -6125,7 +6127,8 @@ Status VersionSet::LogAndApplyHelper(ColumnFamilyData* cfd,
   // because WAL edits do not need to be applied to versions,
   // we return Status::OK() in this case.
   assert(builder || edit->IsWalManipulation());
-  return builder ? builder->Apply(edit) : Status::OK();
+  // return builder ? builder->Apply(edit) : Status::OK();
+  return builder ? builder->Apply(edit, &global_rtree_) : Status::OK();
 }
 
 Status VersionSet::GetCurrentManifestPath(const std::string& dbname,

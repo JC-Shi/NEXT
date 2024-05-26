@@ -317,7 +317,8 @@ struct BlockBasedTableOptions {
   // partition is cut right after an index block is cut
   // TODO(myabandeh): remove the note above when filter partitions are cut
   // separately
-  uint64_t metadata_block_size = 4096;
+  // default value: 4096
+  uint64_t metadata_block_size = 512;
 
   // `cache_usage_options` allows users to specify the default
   // options (`cache_usage_options.options`) and the overriding

@@ -136,7 +136,10 @@ int main(int argc, char* argv[]) {
     options.comparator = &cmp;
 
     options.info_log_level = DEBUG_LEVEL;
-    // options.statistics = rocksdb::CreateDBStatistics();
+    options.statistics = rocksdb::CreateDBStatistics();
+
+    options.max_write_buffer_number = 5;
+    options.max_background_jobs = 8;   
     // options.compaction_pri = kMinMbr;
     // std::cout << "compatction_pri = " << options.compaction_pri << std::endl;
     // options.stats_dump_period_sec = 5;
@@ -189,6 +192,7 @@ int main(int argc, char* argv[]) {
     std::cout << "Open DB status: " << s.ToString() << std::endl;
 
     int id;
+    double perimeter;
     uint32_t op;
     double low[2], high[2];
 
@@ -203,26 +207,57 @@ int main(int argc, char* argv[]) {
         std::cout << "start writing data" << std::endl;
         // auto totalDuration = std::chrono::duration<long long, std::milli>(0);
         std::chrono::nanoseconds totalDuration{0};
-        for (int i = 0; i < dataSize; i++){
-            dataFile >> op >> id >> low[0] >> low[1] >> high[0] >> high[1];
-            // if (i < 50) {
-            //     std::cout << op << " " << id << " " << low[0] << " " << low[1] << " " << high[0] << " " << high[1] << std::endl;
-            // }
-            // std::string key = serialize_key(id, low[0], low[1]);
-            std::string key = serialize_id(id);
-            std::string value = serialize_value(low[0]);
 
-            // std::cout << "In Key: " << id << low[0] << low[1] << std::endl;
-            // Put key-value
+        std::string line;
+        int lineCount = 0;
+        while(std::getline(dataFile, line)) {
+            if (lineCount == dataSize) {
+                break;
+            }
+            lineCount++;
+            std::string token;
+            std::istringstream ss(line);
+
+            ss >> id >> perimeter >> low[0] >> low[1] >> high[0] >> high[1];
+
+            std::string key = serialize_id(id);
+            std::string value = serialize_value(perimeter);
+
+            while(std::getline(ss, token, '\t')) {
+                value += token + "\t";
+            }
+            if(!value.empty() && value.back() == ' ') {
+                value.pop_back();
+            }
+
             auto start = std::chrono::high_resolution_clock::now();
             s = db->Put(WriteOptions(), key, value);
-            // std::cout << "write first data" << std::endl;
-            auto end = std::chrono::high_resolution_clock::now(); 
+            auto end = std::chrono::high_resolution_clock::now();
             auto duration = std::chrono::duration_cast<std::chrono::nanoseconds>(end - start);
             totalDuration = totalDuration + duration;
-            // std::cout << "In Status: " << s.ToString() << std::endl;
-            // assert(s.ok());
         }
+
+        // for (int i = 0; i < dataSize; i++){
+        //     dataFile >> op >> id >> low[0] >> low[1] >> high[0] >> high[1];
+        //     // if (i < 50) {
+        //     //     std::cout << op << " " << id << " " << low[0] << " " << low[1] << " " << high[0] << " " << high[1] << std::endl;
+        //     // }
+        //     // std::string key = serialize_key(id, low[0], low[1]);
+        //     std::string key = serialize_id(id);
+        //     std::string value = serialize_value(low[0]);
+
+        //     // std::cout << "In Key: " << id << low[0] << low[1] << std::endl;
+        //     // Put key-value
+        //     auto start = std::chrono::high_resolution_clock::now();
+        //     s = db->Put(WriteOptions(), key, value);
+        //     // std::cout << "write first data" << std::endl;
+        //     auto end = std::chrono::high_resolution_clock::now(); 
+        //     auto duration = std::chrono::duration_cast<std::chrono::nanoseconds>(end - start);
+        //     totalDuration = totalDuration + duration;
+        //     // std::cout << "In Status: " << s.ToString() << std::endl;
+        //     // assert(s.ok());
+        // }
+
         std::cout << "Status: " << s.ToString() << std::endl;
         assert(s.ok());
 
@@ -231,16 +266,16 @@ int main(int argc, char* argv[]) {
         std::cout << "end writing data" << std::endl;
         std::cout << "Execution time: " << totalDuration.count() << " nanoseconds" << std::endl;
 
-        sleep(300);
-        // std::string stats_value;
-        // db->GetProperty("rocksdb.stats", &stats_value);
-        // std::cout << stats_value << std::endl;
+        sleep(1200);
+        std::string stats_value;
+        db->GetProperty("rocksdb.stats", &stats_value);
+        std::cout << stats_value << std::endl;
 
         db->Close();
 
 
 
-        // std::cout << "RocksDB stats: " << options.statistics->ToString() << std::endl;
+        std::cout << "RocksDB stats: " << options.statistics->ToString() << std::endl;
 
         // std::string key1 = serialize_key(0, 516, 22.214);
         // std::cout << "key1: " << key1 << std::endl;

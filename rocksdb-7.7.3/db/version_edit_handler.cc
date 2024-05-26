@@ -307,7 +307,8 @@ Status VersionEditHandler::OnNonCfOperation(VersionEdit& edit,
       assert(tmp_cfd != nullptr);
       s = MaybeCreateVersion(edit, tmp_cfd, /*force_create_version=*/false);
       if (s.ok()) {
-        s = builder_iter->second->version_builder()->Apply(&edit);
+        // s = builder_iter->second->version_builder()->Apply(&edit);
+        s = builder_iter->second->version_builder()->Apply(&edit, &version_set_->global_rtree_);
       }
     }
     *cfd = tmp_cfd;

@@ -979,6 +979,7 @@ class RtreeSecondaryIndexBuilder : public SecondaryIndexBuilder {
     //     }
     //     return *this;
     // }
+    std::vector<std::string> sec_value;
   };
   struct DataBlockEntry {
     BlockHandle datablockhandle;
@@ -1014,6 +1015,9 @@ class RtreeSecondaryIndexBuilder : public SecondaryIndexBuilder {
   BlockHandle last_encoded_handle_;
   Mbr sub_index_enclosing_mbr_;
   Mbr enclosing_mbr_;
+  Mbr sec_enclosing_mbr_;
+  std::vector<std::string> sec_mbrs_;
+  Mbr temp_sec_mbr_;
   uint32_t rtree_level_;
   std::string rtree_height_str_;
   void expandMbrExcludeIID(Mbr& to_expand, Mbr expander) {
@@ -1220,6 +1224,7 @@ class OneDRtreeSecondaryIndexBuilder : public SecondaryIndexBuilder {
     //     }
     //     return *this;
     // }
+    std::vector<std::string> sec_value;
   };
   struct DataBlockEntry {
     BlockHandle datablockhandle;
@@ -1255,6 +1260,9 @@ class OneDRtreeSecondaryIndexBuilder : public SecondaryIndexBuilder {
   BlockHandle last_encoded_handle_;
   ValueRange sub_index_enclosing_valrange_;
   ValueRange enclosing_valrange_;
+  ValueRange sec_enclosing_valrange_;
+  std::vector<std::string> sec_valranges_;
+  ValueRange temp_sec_valrange_;
   uint32_t rtree_level_;
   std::string rtree_height_str_;
   void expandValrange(ValueRange& to_expand, ValueRange expander) {

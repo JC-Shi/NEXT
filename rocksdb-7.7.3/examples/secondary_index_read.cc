@@ -128,8 +128,8 @@ public:
 
 int main(int argc, char* argv[]) {
 
-    std::ofstream logfile;
-    logfile.open("/home/jiachen001/sdd/rocksdb/db_storage/buildings_2D_01res.txt");
+    // std::ofstream logfile;
+    // logfile.open("/home/jiachen001/sdd/rocksdb/db_storage/buildings_2D_01res.txt");
 
     std::string kDBPath = argv[1];
     int querySize = int(atoi(argv[2]));
@@ -186,10 +186,12 @@ int main(int argc, char* argv[]) {
                 serialize_query(low[0], high[0], low[1], high[1]);
         read_options.iterator_context = &iterator_context;
         read_options.is_secondary_index_scan = true;
+        read_options.async_io = true;
         // std::cout << "create newiterator" << std::endl;
         std::unique_ptr <rocksdb::Iterator> it(db->NewIterator(read_options));
         // std::cout << "created New iterator" << std::endl;
         int counter = 0;
+        // auto start = std::chrono::high_resolution_clock::now();
         for (it->SeekToFirst(); it->Valid(); it->Next()) {
             Val value = deserialize_val(it->value());
             // std::cout << value.mbr << std::endl;
@@ -199,8 +201,9 @@ int main(int argc, char* argv[]) {
         auto duration = std::chrono::duration_cast<std::chrono::nanoseconds>(end - start);
         totalDuration = totalDuration + duration;
         std::cout << "Total number of results: " << counter << std::endl;     
-        logfile << "Total number of results: " << counter << "\n";   
-        logfile << "Query Duration: " << duration.count() << "\n";
+        std::cout << "Query Duration: " << duration.count() << " nanoseconds" << std::endl;
+        // logfile << "Total number of results: " << counter << "\n";   
+        // logfile << "Query Duration: " << duration.count() << "\n";
     }
     std::cout << "Execution time: " << totalDuration.count() << " nanoseconds" << std::endl;
 

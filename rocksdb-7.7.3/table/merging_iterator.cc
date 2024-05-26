@@ -6,6 +6,7 @@
 // Copyright (c) 2011 The LevelDB Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file. See the AUTHORS file for names of contributors.
+#include <chrono>
 
 #include "table/merging_iterator.h"
 
@@ -263,6 +264,8 @@ class MergingIterator : public InternalIterator {
   }
 
   void SeekToFirst() override {
+    // std::cout << "min_heap size before seektofirst: " << minHeap_.size() << std::endl;
+    auto start = std::chrono::high_resolution_clock::now();
     ClearHeaps();
     status_ = Status::OK();
     for (auto& child : children_) {
@@ -282,6 +285,10 @@ class MergingIterator : public InternalIterator {
     FindNextVisibleKey();
     direction_ = kForward;
     current_ = CurrentForward();
+    auto end = std::chrono::high_resolution_clock::now();
+    auto duration = std::chrono::duration_cast<std::chrono::nanoseconds>(end-start);
+    // std::cout << "min heap size after: " << minHeap_.size() << std::endl;
+    // std::cout << "seek to first duration: " << duration.count() << " nanoseconds" << std::endl;
   }
 
   void SeekToLast() override {

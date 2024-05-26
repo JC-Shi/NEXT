@@ -1000,6 +1000,13 @@ class Version {
       const ReadOptions& read_options, MergeIteratorBuilder* merge_iter_builder,
       int level, bool allow_unprepared_value);
 
+  // For Global Secondary Index
+  // TODO(Jiachen) setting the variable based on the sec index type
+  // Currently this may be mannually adjusted
+  // (SecIndexType) Manually Changed is needed here
+  typedef RTree<GlobalSecIndexValue, double, 1, double> GlobalSecRtree;
+  GlobalSecRtree* global_rtree_;
+
  private:
   Env* env_;
   SystemClock* clock_;
@@ -1082,13 +1089,6 @@ class Version {
   const MutableCFOptions mutable_cf_options_;
   // Cached value to avoid recomputing it on every read.
   const size_t max_file_size_for_l0_meta_pin_;
-
-  // For Global Secondary Index
-  // TODO(Jiachen) setting the variable based on the sec index type
-  // Currently this may be mannually adjusted
-  // (SecIndexType) Manually Changed is needed here
-  typedef RTree<GlobalSecIndexValue, double, 2, double> GlobalSecRtree;
-  GlobalSecRtree global_rtree_;
 
   // A version number that uniquely represents this version. This is
   // used for debugging and logging purposes only.
@@ -1497,6 +1497,14 @@ class VersionSet {
     version->PrepareAppend(mutable_cf_options, update_stats);
     AppendVersion(cfd, version);
   }
+
+  // For Global Secondary Index
+  // TODO(Jiachen) setting the variable based on the sec index type
+  // Currently this may be mannually adjusted
+  // (SecIndexType) Manually Changed is needed here
+  typedef RTree<GlobalSecIndexValue, double, 1, double> GlobalSecRtree;
+  GlobalSecRtree global_rtree_;
+  const char* global_rtree_loc_ = "/home/jiachen001/sdd/rocksdb/db_storage/globalrtree/buildings_1D_globalrtree";
 
  protected:
   using VersionBuilderMap =

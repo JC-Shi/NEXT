@@ -105,14 +105,18 @@ void RtreeSecIndexIterator::SeekImpl(const Slice* target) {
 
   
   InitPartitionedSecIndexBlock();
+  // block_iter_mbr_.clear();
 
   // ================================================================================================
 
   block_iter_.SeekToFirst();
+  // expandMbrExcludeIID(block_iter_mbr_, ReadValueMbr(block_iter_.key()));
   // std::cout << "block_iter_ mbr: " << ReadValueMbr(block_iter_.key()) << std::endl;
   while (block_iter_.Valid() && !IntersectMbrExcludeIID(ReadValueMbr(block_iter_.key()), query_mbr_)) {
     block_iter_.Next();
+    // expandMbrExcludeIID(block_iter_mbr_, ReadValueMbr(block_iter_.key()));
   }
+
   // std::cout << "block_iter_ mbr: " << ReadValueMbr(block_iter_.key()) << std::endl;
   
   FindKeyForwardSec();
@@ -163,6 +167,7 @@ void RtreeSecIndexIterator::Next() {
   assert(block_iter_points_to_real_block_);
   do {
     block_iter_.Next();
+    // expandMbrExcludeIID(block_iter_mbr_, ReadValueMbr(block_iter_.key()));
     FindKeyForwardSec();
     // Mbr currentMbr = ReadQueryMbr(block_iter_.key());
     // std::cout << "current index entry: " << currentMbr << std::endl;
@@ -368,9 +373,18 @@ void RtreeSecIndexIterator::FindBlockForwardSec() {
 
     sec_blk_iter_++;
 
+    // std::cout << "Leaf block Mbr: " << block_iter_mbr_ << std::endl;
+
     InitPartitionedSecIndexBlock();
+    // block_iter_mbr_.clear();
     
     block_iter_.SeekToFirst();
+    // expandMbrExcludeIID(block_iter_mbr_, ReadValueMbr(block_iter_.key()));
+    while (block_iter_.Valid() && !IntersectMbrExcludeIID(ReadValueMbr(block_iter_.key()), query_mbr_)) {
+      block_iter_.Next();
+      // expandMbrExcludeIID(block_iter_mbr_, ReadValueMbr(block_iter_.key()));
+    }
+
     // std::cout << "block_iter_ MBR: " << ReadValueMbr(block_iter_.key()) << std::endl;
   } while (!block_iter_.Valid());
 }

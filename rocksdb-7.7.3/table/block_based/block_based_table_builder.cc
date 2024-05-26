@@ -21,6 +21,7 @@
 #include <unordered_map>
 #include <utility>
 #include <iostream>
+#include <chrono>
 
 #include "cache/cache_entry_roles.h"
 #include "cache/cache_key.h"
@@ -2122,8 +2123,15 @@ Status BlockBasedTableBuilder::Finish() {
   BlockHandle metaindex_block_handle, index_block_handle;
   MetaIndexBuilder meta_index_builder;
   WriteFilterBlock(&meta_index_builder);
+  // auto start = std::chrono::high_resolution_clock::now();
   WriteIndexBlock(&meta_index_builder, &index_block_handle);
+  // auto end = std::chrono::high_resolution_clock::now();
   WriteSecIndexBlock(&meta_index_builder);
+  // auto end2 = std::chrono::high_resolution_clock::now();
+  // auto pi_duration = std::chrono::duration_cast<std::chrono::nanoseconds>(end-start);
+  // auto sec_duration = std::chrono::duration_cast<std::chrono::nanoseconds>(end2-end);
+  // std::cout << "Index block write time: " << pi_duration.count() << " nanosecond;" << std::endl;
+  // std::cout << "Sec Index block write time: " << sec_duration.count() << " nanosecond" << std::endl;
   WriteCompressionDictBlock(&meta_index_builder);
   WriteRangeDelBlock(&meta_index_builder);
   WritePropertiesBlock(&meta_index_builder);

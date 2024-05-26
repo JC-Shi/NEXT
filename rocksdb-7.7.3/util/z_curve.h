@@ -45,7 +45,7 @@ namespace rocksdb {
             double y_min = 50.0218541;
             double y_max = 125.9548288;
             // int m = 11;
-            int n = 8192;
+            int n = 262144;
 
             uint32_t x_a_int = std::min(int(floor((x_a - x_min)  / ((x_max - x_min) / n))), n-1);
             uint32_t y_a_int = std::min(int(floor((y_a - y_min)  / ((y_max - y_min) / n))), n-1);
