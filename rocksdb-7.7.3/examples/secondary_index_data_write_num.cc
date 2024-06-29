@@ -218,7 +218,11 @@ int main(int argc, char* argv[]) {
             std::string token;
             std::istringstream ss(line);
 
-            ss >> id >> perimeter >> low[0] >> low[1] >> high[0] >> high[1];
+            // For dataset Buildings
+            // ss >> id >> perimeter >> low[0] >> low[1] >> high[0] >> high[1];
+            
+            // For dataset Tweet
+            ss >> id >> low[0] >> low[1] >> high[0] >> high[1] >> perimeter;
 
             std::string key = serialize_id(id);
             std::string value = serialize_value(perimeter);

@@ -1504,7 +1504,7 @@ class VersionSet {
   // (SecIndexType) Manually Changed is needed here
   typedef RTree<GlobalSecIndexValue, double, 1, double> GlobalSecRtree;
   GlobalSecRtree global_rtree_;
-  const char* global_rtree_loc_ = "/home/jiachen001/sdd/rocksdb/db_storage/globalrtree/buildings_1D_globalrtree";
+  const char* global_rtree_loc_ = "/home/jiachen001/sdd/rocksdb/db_storage/globalrtree/tweet_1D";
 
  protected:
   using VersionBuilderMap =
