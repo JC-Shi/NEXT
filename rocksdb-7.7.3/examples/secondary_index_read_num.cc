@@ -78,10 +78,10 @@ public:
         //     return 0;
         // }
 
-        return slice_a.compare(slice_b);
+        // return slice_a.compare(slice_b);
 
         // // Specifically for R-tree as r-tree does not implement ordering
-        // return 1;
+        return 1;
     }
 
     void FindShortestSeparator(std::string* start,
@@ -99,6 +99,8 @@ int main(int argc, char* argv[]) {
     std::string kDBPath = argv[1];
     int querySize = int(atoi(argv[2]));
     std::ifstream queryFile(argv[3]);
+    // std::string resultpath = argv[5];
+    // std::ofstream resFile(resultpath);
     std::cout << "Query size: " << querySize << std::endl;
 
     DB* db;
@@ -161,18 +163,20 @@ int main(int argc, char* argv[]) {
         int counter = 0;
         for (it->SeekToFirst(); it->Valid(); it->Next()) {
             double value = deserialize_val(it->value());
-            // std::cout << value.mbr << std::endl;
+            // std::cout << value << std::endl;
             counter ++;
         }
         auto end = std::chrono::high_resolution_clock::now(); 
         auto duration = std::chrono::duration_cast<std::chrono::nanoseconds>(end - start);
         totalDuration = totalDuration + duration;
+        // resFile << "Results: \t" << counter << "\t" << totalDuration.count() << "\n";
         std::cout << "Total number of results: " << counter << std::endl;     
-        std::cout << "Query Duration: " << duration.count() << " nanoseconds" << std::endl;   
+        // std::cout << "Query Duration: " << duration.count() << " nanoseconds" << std::endl;   
     }
     std::cout << "Execution time: " << totalDuration.count() << " nanoseconds" << std::endl;
 
     db->Close();    
+    // resFile.close();
 
     // for (int i=0; i < dataSize; i++) {
     //     std::string q_key = serialize_id(i);

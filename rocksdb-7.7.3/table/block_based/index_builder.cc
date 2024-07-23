@@ -731,11 +731,11 @@ Status RtreeSecondaryIndexBuilder::Finish(
       Mbr b_mbr = ReadSecQueryMbr(b.subindexenclosingmbr);
 
       // defining z-curve based on grid cells on data space
-      // for dataset india
-      // double x_min = -12.2304942;
-      // double x_max = 37.4497039;
-      // double y_min = 50.0218541;
-      // double y_max = 125.9548288;
+      // for dataset Tweet
+      // double x_min = -179.9942;
+      // double x_max = 179.9868;
+      // double y_min = -90;
+      // double y_max = 90;
       // for dataset buildings
       double x_min = -179.7582827;
       double x_max = 179.8440789;

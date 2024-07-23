@@ -118,6 +118,7 @@ struct ColumnFamilyOptions : public AdvancedColumnFamilyOptions {
   // here has the same name and orders keys *exactly* the same as the
   // comparator provided to previous open calls on the same DB.
   const Comparator* comparator = BytewiseComparator();
+  const Comparator* sec_comparator = BytewiseComparator();
 
   // REQUIRES: The client must provide a merge operator if Merge operation
   // needs to be accessed. Calling Merge on a DB without a merge operator

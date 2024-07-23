@@ -542,6 +542,7 @@ ColumnFamilyData::ColumnFamilyData(
       initialized_(false),
       dropped_(false),
       internal_comparator_(cf_options.comparator),
+      internal_sec_comparator_(cf_options.sec_comparator),
       initial_cf_options_(SanitizeOptions(db_options, cf_options)),
       ioptions_(db_options, initial_cf_options_),
       mutable_cf_options_(initial_cf_options_),
@@ -1156,7 +1157,8 @@ Status ColumnFamilyData::RangesOverlapWithMemtables(
   Arena arena;
   ReadOptions read_opts;
   read_opts.total_order_seek = true;
-  MergeIteratorBuilder merge_iter_builder(&internal_comparator_, &arena);
+  // MergeIteratorBuilder merge_iter_builder(&internal_comparator_, &arena);
+  MergeIteratorBuilder merge_iter_builder(&internal_sec_comparator_, &arena);
   merge_iter_builder.AddIterator(
       super_version->mem->NewIterator(read_opts, &arena));
   super_version->imm->AddIterators(read_opts, &merge_iter_builder,

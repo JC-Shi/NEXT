@@ -874,6 +874,7 @@ ImmutableCFOptions::ImmutableCFOptions(const ColumnFamilyOptions& cf_options)
       compaction_output_selection(cf_options.compaction_output_selection),
       compaction_pri(cf_options.compaction_pri),
       user_comparator(cf_options.comparator),
+      user_sec_comparator(cf_options.sec_comparator),
       internal_comparator(InternalKeyComparator(cf_options.comparator)),
       merge_operator(cf_options.merge_operator),
       compaction_filter(cf_options.compaction_filter),

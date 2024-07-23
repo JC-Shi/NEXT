@@ -686,6 +686,7 @@ bool DataBlockIter::ParseNextSpatialDataKey(bool* is_shared) {
 bool DataBlockIter::ParseNextSecSpatialDataKey(bool* is_shared) {
   bool ret = false;
   do {
+    // std::cout << *reinterpret_cast<const int*>(key().data()) << std::endl;
     ret = ParseNextDataKey(is_shared);
     UpdateKey();
     

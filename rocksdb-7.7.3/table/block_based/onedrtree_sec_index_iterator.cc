@@ -22,7 +22,7 @@ void OneDRtreeSecIndexIterator::SeekImpl(const Slice* target) {
   if (target != nullptr) {
     // The target for seek function here for secondary index shall be value
     query_valrange_ = ReadValueRange(*target);
-    std::cout << "target query_valrange_: " << query_valrange_ << std::endl;
+    // std::cout << "target query_valrange_: " << query_valrange_ << std::endl;
   }
 
   // ============================================================================================================================================================

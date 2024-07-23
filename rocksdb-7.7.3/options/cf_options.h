@@ -33,6 +33,7 @@ struct ImmutableCFOptions {
   CompactionPri compaction_pri;
 
   const Comparator* user_comparator;
+  const Comparator* user_sec_comparator;
   InternalKeyComparator internal_comparator;  // Only in Immutable
 
   std::shared_ptr<MergeOperator> merge_operator;

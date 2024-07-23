@@ -27,30 +27,24 @@ std::string serialize_id(int iid) {
     return key;
 }
 
-std::string serialize_value(double xValueMin, double xValueMax, double yValueMin, double yValueMax, uint64_t tstamp) {
+std::string serialize_value(double xValue, uint64_t tstamp) {
     std::string val;
     // The R-tree stores boxes, hence duplicate the input values
-    val.append(reinterpret_cast<const char*>(&xValueMin), sizeof(double));
-    val.append(reinterpret_cast<const char*>(&xValueMax), sizeof(double));
-    val.append(reinterpret_cast<const char*>(&yValueMin), sizeof(double));
-    val.append(reinterpret_cast<const char*>(&yValueMax), sizeof(double));
+    val.append(reinterpret_cast<const char*>(&xValue), sizeof(double));
     val.append(reinterpret_cast<const char*>(&tstamp), sizeof(uint64_t));
     return val;
 }
 
-std::string serialize_query(double x_value_min, double x_value_max,
-                            double y_value_min, double y_value_max) {
+std::string serialize_query(double x_value_min, double x_value_max) {
     std::string query;
     query.append(reinterpret_cast<const char*>(&x_value_min), sizeof(double));
     query.append(reinterpret_cast<const char*>(&x_value_max), sizeof(double));
-    query.append(reinterpret_cast<const char*>(&y_value_min), sizeof(double));
-    query.append(reinterpret_cast<const char*>(&y_value_max), sizeof(double));
     return query;
 }
 
 uint64_t deserialize_val(Slice val_slice) {
     uint64_t tstamp;
-    tstamp = *reinterpret_cast<const uint64_t*>(val_slice.data() + 32);
+    tstamp = *reinterpret_cast<const uint64_t*>(val_slice.data() + 8);
     return tstamp;
 }
 
@@ -67,6 +61,12 @@ int deserialize_key(Slice val_slice) {
 // Val deserialize_val(Slice val_slice) {
 //     Val val;
 //     val.mbr = ReadValueMbr(val_slice);
+//     return val;
+// }
+
+// double deserialize_val(Slice val_slice) {
+//     double val;
+//     val = *reinterpret_cast<const double*>(val_slice.data());
 //     return val;
 // }
 
@@ -175,11 +175,13 @@ int main(int argc, char* argv[]) {
     // For per file secondary index in SST file
     block_based_options.create_secondary_index = true;
     block_based_options.create_sec_index_reader = true;
+    block_based_options.sec_index_type = BlockBasedTableOptions::kOneDRtreeSec;
     block_based_options.block_cache = rocksdb::NewLRUCache(64 * 1024 * 1024);
     
     // For global secondary index in memory
     options.create_global_sec_index = true;
     options.global_sec_index_loc = argv[4];
+    options.global_sec_index_is_spatial = false;
     std::string resultpath = argv[5];
     std::ofstream resFile(resultpath);
 
@@ -205,6 +207,7 @@ int main(int argc, char* argv[]) {
     std::cout << "Open DB status: " << s.ToString() << std::endl;
 
     int id;
+    double userid;
     uint32_t op;
     double low[2], high[2];
 
@@ -237,11 +240,11 @@ int main(int argc, char* argv[]) {
         if (operation_type == "w"){
             write_c ++;
 
-            ss >> id >> low[0] >> low[1] >> high[0] >> high[1];
+            ss >> id >> low[0] >> low[1] >> high[0] >> high[1] >> userid;
             auto write_start = std::chrono::high_resolution_clock::now();
 
             std::string key = serialize_id(id);
-            std::string value = serialize_value(low[0], high[0], low[1], high[1], time_stamp);
+            std::string value = serialize_value(userid, time_stamp);
             time_stamp ++;
 
             while(std::getline(ss, token, '\t')) {
@@ -259,14 +262,15 @@ int main(int argc, char* argv[]) {
         } else if (operation_type == "rs") {
             query_c ++;
 
-            ss >> low[0] >> low[1] >> high[0] >> high[1];
+            ss >> low[0] >> low[1];
 
             auto query_start = std::chrono::high_resolution_clock::now();
             iterator_context.query_mbr = 
-                    serialize_query(low[0], high[0], low[1], high[1]);
+                    serialize_query(low[0], low[1]);
             read_options.iterator_context = &iterator_context;
             read_options.is_secondary_index_scan = true;
-            // read_options.async_io = true;
+            read_options.is_secondary_index_spatial = false;
+            read_options.async_io = true;
             // std::cout << "create newiterator" << std::endl;
             std::unique_ptr <rocksdb::Iterator> it(db->NewIterator(read_options));
             // std::cout << "created New iterator" << std::endl;
@@ -276,6 +280,7 @@ int main(int argc, char* argv[]) {
                 int pkey_id = deserialize_key(it->key());
                 // Val value = deserialize_val(it->value());
                 uint64_t timestamp = deserialize_val(it->value());
+                // double value = deserialize_val(it->value());
                 if (update_memo.count(pkey_id) > 0 && update_memo[pkey_id] > timestamp) {
                     continue;
                 } else {
@@ -297,11 +302,11 @@ int main(int argc, char* argv[]) {
         } else if (operation_type == "up") {
             update_c ++;
 
-            ss >> id >> low[0] >> low[1] >> high[0] >> high[1];
+            ss >> id >> low[0] >> low[1] >> high[0] >> high[1] >> userid;
             auto update_start = std::chrono::high_resolution_clock::now();
 
             std::string key = serialize_id(id);
-            std::string value = serialize_value(low[0], high[0], low[1], high[1], time_stamp);
+            std::string value = serialize_value(userid, time_stamp);
 
             while(std::getline(ss, token, '\t')) {
                 value += token + "\t";

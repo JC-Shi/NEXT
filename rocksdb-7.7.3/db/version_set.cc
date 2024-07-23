@@ -1986,6 +1986,7 @@ void Version::AddIteratorsForLevel(const ReadOptions& read_options,
       // uint64_t hfile_number = hittedFiles[i].second;
       // uint64_t hfile_number = hitfilenum[i];
       uint64_t hfile_number = mit->first;
+      // std::cout << hfile_number << std::endl;
 
       // for (const BlockHandle& bh: filenum_2_blkhandle[hfile_number]) {
       for (const BlockHandle& bh: mit->second) {
@@ -2008,10 +2009,14 @@ void Version::AddIteratorsForLevel(const ReadOptions& read_options,
       // file_level: location.GetLevel()
       // file_position: location.GetPosition()
       auto hfile_loc = storage_info_.GetFileLocation(hfile_number);
+      if (hfile_loc.GetLevel() == -1) {
+        read_options.found_sec_blkhandle->clear();
+        continue;
+      } 
       // create the iterator
       const auto& file = storage_info_.LevelFilesBrief(hfile_loc.GetLevel()).files[hfile_loc.GetPosition()];
       auto table_iter = cfd_->table_cache()->NewIterator(
-          read_options, soptions, cfd_->internal_comparator(),
+          read_options, soptions, cfd_->internal_sec_comparator(),
           *file.file_metadata, /*range_del_agg=*/nullptr,
           mutable_cf_options_.prefix_extractor, nullptr,
           cfd_->internal_stats()->GetFileReadHist(0),
@@ -2228,12 +2233,16 @@ Version::Version(ColumnFamilyData* column_family_data, VersionSet* vset,
       max_file_size_for_l0_meta_pin_(
           MaxFileSizeForL0MetaPin(mutable_cf_options_)),
       version_number_(version_number),
-      io_tracer_(io_tracer) {
+      io_tracer_(io_tracer)
+      // global_rtree_(vset->global_rtree_)
+       {
         if (mutable_cf_options.create_global_sec_index) {
           // TODO(Jiachen) based on the secondary index type
           // the global_sec_index shall load different files
           // global_rtree_.Load(mutable_cf_options.global_sec_index_loc);
           global_rtree_ = &vset->global_rtree_;
+          // global_rtree_(vset->global_rtree_);
+          // global_rtree_.Load(vset->global_rtree_loc_);
         }
       }
 
@@ -6128,6 +6137,7 @@ Status VersionSet::LogAndApplyHelper(ColumnFamilyData* cfd,
   // we return Status::OK() in this case.
   assert(builder || edit->IsWalManipulation());
   // return builder ? builder->Apply(edit) : Status::OK();
+  // std::cout << "log and apply" << std::endl;
   return builder ? builder->Apply(edit, &global_rtree_) : Status::OK();
 }
 

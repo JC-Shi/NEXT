@@ -467,6 +467,8 @@ class SkipListSecRep : public SkipListRep {
                 } else {
                   query_mbr_ = ReadSecQueryMbr(query_slice);
                 }
+                // std::cout << "query mbr: " << query_mbr_ << std::endl;
+                // std::cout << "query valrange: " << query_valrange_ << std::endl;
 
                 // Slice keypath_slice;
                 // GetLengthPrefixedSlice(&query_slice, &keypath_slice);
@@ -500,7 +502,8 @@ class SkipListSecRep : public SkipListRep {
             // If value is not intersected or equal, skip
             Slice internal_key_slice = GetLengthPrefixedSlice(key());
             Slice val_slice = GetLengthPrefixedSlice(internal_key_slice.data() + internal_key_slice.size());
-            if (!query_valrange_.empty()) {             
+            if (query_valrange_.empty()) {        
+              // std::cout << "skip list mbr" << std::endl;     
               Mbr mbr = ReadValueMbr(val_slice);
               if (!IntersectMbrExcludeIID(mbr, query_mbr_)) {
                 Next();

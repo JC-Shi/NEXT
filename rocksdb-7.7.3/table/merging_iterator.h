@@ -37,6 +37,8 @@ extern InternalIterator* NewMergingIterator(
 
 class MergingIterator;
 
+class MergingIteratorNoOrder;
+
 // A builder class to build a merging iterator by adding iterators one by one.
 // User should call only one of AddIterator() or AddPointAndTombstoneIterator()
 // exclusively for the same builder.
@@ -79,6 +81,7 @@ class MergeIteratorBuilder {
 
  private:
   MergingIterator* merge_iter;
+//   MergingIteratorNoOrder* merge_iter;
   InternalIterator* first_iter;
   bool use_merging_iter;
   Arena* arena;

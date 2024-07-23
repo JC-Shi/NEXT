@@ -429,6 +429,15 @@ class ColumnFamilyData {
     return internal_comparator_;
   }
 
+  // thread-safe
+  const Comparator* user_sec_comparator() const {
+    return internal_sec_comparator_.user_comparator();
+  }
+  // thread-safe
+  const InternalKeyComparator& internal_sec_comparator() const {
+    return internal_sec_comparator_;
+  }
+
   const IntTblPropCollectorFactories* int_tbl_prop_collector_factories() const {
     return &int_tbl_prop_collector_factories_;
   }
@@ -557,6 +566,7 @@ class ColumnFamilyData {
   std::atomic<bool> dropped_;  // true if client dropped it
 
   const InternalKeyComparator internal_comparator_;
+  const InternalKeyComparator internal_sec_comparator_;
   IntTblPropCollectorFactories int_tbl_prop_collector_factories_;
 
   const ColumnFamilyOptions initial_cf_options_;

@@ -899,7 +899,7 @@ class VersionBuilder::Rep {
 
     // Apply all of the edits in *edit to the current state.
   Status Apply(const VersionEdit* edit) {
-    std::cout << "old apply" << std::endl;
+    // std::cout << "old apply" << std::endl;
     {
       const Status s = CheckConsistency(base_vstorage_);
       if (!s.ok()) {
@@ -914,11 +914,11 @@ class VersionBuilder::Rep {
     // (SecIndexType) Manually Changed is needed here
 
     // typedef RTree<GlobalSecIndexValue, double, 2, double> GlobalSecRtree;
-    GlobalSecRtree global_rtree;    
+    // GlobalSecRtree global_rtree;    
 
-    if (ioptions_->global_sec_index) {
-      global_rtree.Load(ioptions_->global_index_loc);
-    }
+    // if (ioptions_->global_sec_index) {
+    //   global_rtree.Load(ioptions_->global_index_loc);
+    // }
 
     // Note: we process the blob file related changes first because the
     // table file addition/deletion logic depends on the blob files
@@ -947,46 +947,46 @@ class VersionBuilder::Rep {
 
       // if global rtree is activated
       // remove entry from global rtree for each deleted files
-      if(ioptions_->global_sec_index) {
-        if (!ioptions_->global_sec_index_is_spatial){
-          // const ValueRange valrange = GetValRangeForTableFile(level, file_number);
-          // Rect1D filerect(valrange.range.min, valrange.range.max);
-          // global_rtree.Remove(filerect.min, filerect.max, std::make_pair(level, file_number));
+      // if(ioptions_->global_sec_index) {
+      //   if (!ioptions_->global_sec_index_is_spatial){
+      //     // const ValueRange valrange = GetValRangeForTableFile(level, file_number);
+      //     // Rect1D filerect(valrange.range.min, valrange.range.max);
+      //     // global_rtree.Remove(filerect.min, filerect.max, std::make_pair(level, file_number));
 
-          const std::vector<std::pair<ValueRange, BlockHandle>> file_secentries_num = GetSecValRangeForTableFile(level, file_number);
-          int globla_sec_id = 0;
-          for (const std::pair<ValueRange, BlockHandle>& entry: file_secentries_num) {
-            ValueRange entryvalrange = entry.first;
-            Rect1D tuplerect_num(entryvalrange.range.min, entryvalrange.range.max);
-            BlockHandle entryblkhandle_num = entry.second;
-            GlobalSecIndexValue sec_index_val_num(globla_sec_id, file_number, entryblkhandle_num);
-            global_rtree.Remove(tuplerect_num.min, tuplerect_num.max, sec_index_val_num);
-            globla_sec_id++;
-          }
-        } else {
-          // // global index @ tuple level
-          // const std::vector<std::pair<int, Mbr>> filetuples= GetTupleMbrForTableFile(level, file_number);
-          // for (const std::pair<int, Mbr>& tuple : filetuples) {
-          //   int tupleid = tuple.first;
-          //   Mbr tuplembr = tuple.second;
-          //   Rect tuplerect(tuplembr.first.min, tuplembr.second.min, tuplembr.first.max, tuplembr.second.max);
-          //   global_rtree.Remove(tuplerect.min, tuplerect.max, std::make_pair(tupleid, file_number));
-          // }
+      //     const std::vector<std::pair<ValueRange, BlockHandle>> file_secentries_num = GetSecValRangeForTableFile(level, file_number);
+      //     int globla_sec_id = 0;
+      //     for (const std::pair<ValueRange, BlockHandle>& entry: file_secentries_num) {
+      //       ValueRange entryvalrange = entry.first;
+      //       Rect1D tuplerect_num(entryvalrange.range.min, entryvalrange.range.max);
+      //       BlockHandle entryblkhandle_num = entry.second;
+      //       GlobalSecIndexValue sec_index_val_num(globla_sec_id, file_number, entryblkhandle_num);
+      //       global_rtree.Remove(tuplerect_num.min, tuplerect_num.max, sec_index_val_num);
+      //       globla_sec_id++;
+      //     }
+      //   } else {
+      //     // // global index @ tuple level
+      //     // const std::vector<std::pair<int, Mbr>> filetuples= GetTupleMbrForTableFile(level, file_number);
+      //     // for (const std::pair<int, Mbr>& tuple : filetuples) {
+      //     //   int tupleid = tuple.first;
+      //     //   Mbr tuplembr = tuple.second;
+      //     //   Rect tuplerect(tuplembr.first.min, tuplembr.second.min, tuplembr.first.max, tuplembr.second.max);
+      //     //   global_rtree.Remove(tuplerect.min, tuplerect.max, std::make_pair(tupleid, file_number));
+      //     // }
 
-          // global index @ block level
-          const std::vector<std::pair<Mbr, BlockHandle>> file_secentries = GetSecEntriesForTableFile(level, file_number);         
-          // std::cout << "delete: " <<  file_number << "; filetuple_entries.size: " << static_cast<int>(file_secentries.size()) << std::endl;
-          int glosecid = 0;
-          for (const std::pair<Mbr, BlockHandle>& entry: file_secentries) {    
-            Mbr entrymbr = entry.first;
-            BlockHandle entryblkhandle = entry.second;
-            GlobalSecIndexValue sec_index_val(glosecid, file_number, entryblkhandle);
-            Rect tuplerect(entrymbr.first.min, entrymbr.second.min, entrymbr.first.max, entrymbr.second.max);
-            global_rtree.Remove(tuplerect.min, tuplerect.max, sec_index_val);
-            glosecid++;
-          }   
-        }
-      }
+      //     // global index @ block level
+      //     const std::vector<std::pair<Mbr, BlockHandle>> file_secentries = GetSecEntriesForTableFile(level, file_number);         
+      //     // std::cout << "delete: " <<  file_number << "; filetuple_entries.size: " << static_cast<int>(file_secentries.size()) << std::endl;
+      //     int glosecid = 0;
+      //     for (const std::pair<Mbr, BlockHandle>& entry: file_secentries) {    
+      //       Mbr entrymbr = entry.first;
+      //       BlockHandle entryblkhandle = entry.second;
+      //       GlobalSecIndexValue sec_index_val(glosecid, file_number, entryblkhandle);
+      //       Rect tuplerect(entrymbr.first.min, entrymbr.second.min, entrymbr.first.max, entrymbr.second.max);
+      //       global_rtree.Remove(tuplerect.min, tuplerect.max, sec_index_val);
+      //       glosecid++;
+      //     }   
+      //   }
+      // }
 
       const Status s = ApplyFileDeletion(level, file_number);
       if (!s.ok()) {
@@ -1002,49 +1002,49 @@ class VersionBuilder::Rep {
       // Add an entry to global rtree for each new file
       // the index value will be rect based on mbr
       // the index data contains file level and filenumber
-      if(ioptions_->global_sec_index) {
-        const uint64_t filenumber = meta.fd.GetNumber();
-        if (!ioptions_->global_sec_index_is_spatial) {
-          // ValueRange filevalrange = meta.valrange;
-          // Rect1D filerect(filevalrange.range.min, filevalrange.range.max);
-          // global_rtree.Insert(filerect.min, filerect.max, std::make_pair(level, filenumber));
+      // if(ioptions_->global_sec_index) {
+      //   const uint64_t filenumber = meta.fd.GetNumber();
+      //   if (!ioptions_->global_sec_index_is_spatial) {
+      //     // ValueRange filevalrange = meta.valrange;
+      //     // Rect1D filerect(filevalrange.range.min, filevalrange.range.max);
+      //     // global_rtree.Insert(filerect.min, filerect.max, std::make_pair(level, filenumber));
 
-          std::vector<std::pair<ValueRange, BlockHandle>> filetuple_entries_num = meta.SecValrange;
+      //     std::vector<std::pair<ValueRange, BlockHandle>> filetuple_entries_num = meta.SecValrange;
 
-          int rtree_id_num = 0;
-          for (const std::pair<ValueRange, BlockHandle>& entry: filetuple_entries_num) {
-            ValueRange entryvalrange = entry.first;
-            BlockHandle entryblkhandle_num = entry.second;
-            GlobalSecIndexValue sec_indexvalnum(rtree_id_num, filenumber, entryblkhandle_num);
-            Rect1D tuplerect_num(entryvalrange.range.min, entryvalrange.range.max);
-            global_rtree.Insert(tuplerect_num.min, tuplerect_num.max, sec_indexvalnum);
-            rtree_id_num++;
-          }
-        } else {
-          // // For global index @ tuple level
-          // std::vector<std::pair<int, Mbr>> filetuplembrs = meta.tuple_mbrs;
-          // for (const std::pair<int, Mbr>& tuple: filetuplembrs) {
-          //   int tupleid = tuple.first;
-          //   Mbr tuplembr = tuple.second;
-          //   Rect tuplerect(tuplembr.first.min, tuplembr.second.min, tuplembr.first.max, tuplembr.second.max);
-          //   global_rtree.Insert(tuplerect.min, tuplerect.max, std::make_pair(tupleid, filenumber));
-          // }
+      //     int rtree_id_num = 0;
+      //     for (const std::pair<ValueRange, BlockHandle>& entry: filetuple_entries_num) {
+      //       ValueRange entryvalrange = entry.first;
+      //       BlockHandle entryblkhandle_num = entry.second;
+      //       GlobalSecIndexValue sec_indexvalnum(rtree_id_num, filenumber, entryblkhandle_num);
+      //       Rect1D tuplerect_num(entryvalrange.range.min, entryvalrange.range.max);
+      //       global_rtree.Insert(tuplerect_num.min, tuplerect_num.max, sec_indexvalnum);
+      //       rtree_id_num++;
+      //     }
+      //   } else {
+      //     // // For global index @ tuple level
+      //     // std::vector<std::pair<int, Mbr>> filetuplembrs = meta.tuple_mbrs;
+      //     // for (const std::pair<int, Mbr>& tuple: filetuplembrs) {
+      //     //   int tupleid = tuple.first;
+      //     //   Mbr tuplembr = tuple.second;
+      //     //   Rect tuplerect(tuplembr.first.min, tuplembr.second.min, tuplembr.first.max, tuplembr.second.max);
+      //     //   global_rtree.Insert(tuplerect.min, tuplerect.max, std::make_pair(tupleid, filenumber));
+      //     // }
 
-          // For global index @ file group level
-          std::vector<std::pair<Mbr, BlockHandle>> filetuple_entries = meta.SecondaryEntries;
-          // std::cout << "insert: " << filenumber << "; filetuple_entries.size: " << static_cast<int>(filetuple_entries.size()) << std::endl;
+      //     // For global index @ file group level
+      //     std::vector<std::pair<Mbr, BlockHandle>> filetuple_entries = meta.SecondaryEntries;
+      //     // std::cout << "insert: " << filenumber << "; filetuple_entries.size: " << static_cast<int>(filetuple_entries.size()) << std::endl;
          
-          int rtree_id = 0;         
-          for (const std::pair<Mbr, BlockHandle>& entry: filetuple_entries) { 
-            Mbr entrymbr = entry.first;
-            BlockHandle entryblkhandle = entry.second;
-            GlobalSecIndexValue sec_indexval(rtree_id, filenumber, entryblkhandle);
-            Rect tuplerect(entrymbr.first.min, entrymbr.second.min, entrymbr.first.max, entrymbr.second.max);
-            global_rtree.Insert(tuplerect.min, tuplerect.max, sec_indexval);
-            rtree_id++;
-          }
-        }
-      }
+      //     int rtree_id = 0;         
+      //     for (const std::pair<Mbr, BlockHandle>& entry: filetuple_entries) { 
+      //       Mbr entrymbr = entry.first;
+      //       BlockHandle entryblkhandle = entry.second;
+      //       GlobalSecIndexValue sec_indexval(rtree_id, filenumber, entryblkhandle);
+      //       Rect tuplerect(entrymbr.first.min, entrymbr.second.min, entrymbr.first.max, entrymbr.second.max);
+      //       global_rtree.Insert(tuplerect.min, tuplerect.max, sec_indexval);
+      //       rtree_id++;
+      //     }
+      //   }
+      // }
 
       const Status s = ApplyFileAddition(level, meta);
       if (!s.ok()) {
@@ -1063,17 +1063,18 @@ class VersionBuilder::Rep {
       }
     }
 
-    // after all the process, save the global secondary index to the file location
-    if(ioptions_->global_sec_index) {
-      global_rtree.Save(ioptions_->global_index_loc);
-      // std::cout << "global rtree saved" << std::endl;
-    }
+    // // after all the process, save the global secondary index to the file location
+    // if(ioptions_->global_sec_index) {
+    //   // global_rtree.Save(ioptions_->global_index_loc);
+    //   std::cout << "global rtree saved" << std::endl;
+    // }
 
     return Status::OK();
   }
 
     // Apply all of the edits in *edit to the current state.
   Status Apply(const VersionEdit* edit, GlobalSecRtree* global_rtee_p) {
+    // std::cout << "apply" << std::endl;
     {
       const Status s = CheckConsistency(base_vstorage_);
       if (!s.ok()) {

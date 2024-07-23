@@ -1006,6 +1006,7 @@ class Version {
   // (SecIndexType) Manually Changed is needed here
   typedef RTree<GlobalSecIndexValue, double, 1, double> GlobalSecRtree;
   GlobalSecRtree* global_rtree_;
+  // GlobalSecRtree global_rtree_;
 
  private:
   Env* env_;
@@ -1094,6 +1095,9 @@ class Version {
   // used for debugging and logging purposes only.
   uint64_t version_number_;
   std::shared_ptr<IOTracer> io_tracer_;
+
+  // typedef RTree<GlobalSecIndexValue, double, 2, double> GlobalSecRtree;
+  // GlobalSecRtree global_rtree_;
 
   Version(ColumnFamilyData* cfd, VersionSet* vset, const FileOptions& file_opt,
           MutableCFOptions mutable_cf_options,
@@ -1504,7 +1508,7 @@ class VersionSet {
   // (SecIndexType) Manually Changed is needed here
   typedef RTree<GlobalSecIndexValue, double, 1, double> GlobalSecRtree;
   GlobalSecRtree global_rtree_;
-  const char* global_rtree_loc_ = "/home/jiachen001/sdd/rocksdb/db_storage/globalrtree/tweet_1D";
+  const char* global_rtree_loc_ = "/home/jiachen001/sdd/rocksdb/db_storage/globalrtree/Buildings_1D";
 
  protected:
   using VersionBuilderMap =

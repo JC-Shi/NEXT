@@ -1799,8 +1799,12 @@ InternalIterator* DBImpl::NewInternalIterator(
   InternalIterator* internal_iter;
   assert(arena != nullptr);
   // Need to create internal iterator from the arena.
+  // MergeIteratorBuilder merge_iter_builder(
+  //     &cfd->internal_comparator(), arena,
+  //     !read_options.total_order_seek &&
+  //         super_version->mutable_cf_options.prefix_extractor != nullptr);
   MergeIteratorBuilder merge_iter_builder(
-      &cfd->internal_comparator(), arena,
+      &cfd->internal_sec_comparator(), arena,
       !read_options.total_order_seek &&
           super_version->mutable_cf_options.prefix_extractor != nullptr);
   // Collect iterator for mutable memtable
@@ -3579,9 +3583,14 @@ Iterator* DBImpl::NewIterator(const ReadOptions& read_options,
     SuperVersion* sv = cfd->GetReferencedSuperVersion(this);
     auto iter = new ForwardIterator(this, read_options, cfd, sv,
                                     /* allow_unprepared_value */ true);
+    // result = NewDBIterator(
+    //     env_, read_options, *cfd->ioptions(), sv->mutable_cf_options,
+    //     cfd->user_comparator(), iter, sv->current, kMaxSequenceNumber,
+    //     sv->mutable_cf_options.max_sequential_skip_in_iterations, read_callback,
+    //     this, cfd);
     result = NewDBIterator(
         env_, read_options, *cfd->ioptions(), sv->mutable_cf_options,
-        cfd->user_comparator(), iter, sv->current, kMaxSequenceNumber,
+        cfd->user_sec_comparator(), iter, sv->current, kMaxSequenceNumber,
         sv->mutable_cf_options.max_sequential_skip_in_iterations, read_callback,
         this, cfd);
 #endif
@@ -3724,9 +3733,14 @@ Status DBImpl::NewIterators(
       SuperVersion* sv = cfd->GetReferencedSuperVersion(this);
       auto iter = new ForwardIterator(this, read_options, cfd, sv,
                                       /* allow_unprepared_value */ true);
+      // iterators->push_back(NewDBIterator(
+      //     env_, read_options, *cfd->ioptions(), sv->mutable_cf_options,
+      //     cfd->user_comparator(), iter, sv->current, kMaxSequenceNumber,
+      //     sv->mutable_cf_options.max_sequential_skip_in_iterations,
+      //     read_callback, this, cfd));
       iterators->push_back(NewDBIterator(
           env_, read_options, *cfd->ioptions(), sv->mutable_cf_options,
-          cfd->user_comparator(), iter, sv->current, kMaxSequenceNumber,
+          cfd->user_sec_comparator(), iter, sv->current, kMaxSequenceNumber,
           sv->mutable_cf_options.max_sequential_skip_in_iterations,
           read_callback, this, cfd));
     }

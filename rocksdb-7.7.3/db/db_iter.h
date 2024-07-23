@@ -288,6 +288,9 @@ class DBIter final : public Iterator {
   // to return versions of the same key. We cannot just skip if the key value
   // is the same but timestamps are different but fall in timestamp range.
   inline int CompareKeyForSkip(const Slice& a, const Slice& b) {
+    // (void) a;
+    // (void) b;
+    // return 1;
     return timestamp_lb_ != nullptr
                ? user_comparator_.Compare(a, b)
                : user_comparator_.CompareWithoutTimestamp(a, b);

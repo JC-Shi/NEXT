@@ -119,6 +119,45 @@ public:
     }
 };
 
+class NoiseComparator1 : public rocksdb::Comparator {
+public:
+    const char* Name() const {
+        return "rocksdb.NoiseComparator";
+    }
+
+    int Compare(const rocksdb::Slice& const_a, const rocksdb::Slice& const_b) const {
+        Slice slice_a = Slice(const_a);
+        Slice slice_b = Slice(const_b);
+
+        // keypaths are the same, compare the value. The previous
+        // `GetLengthPrefixedSlice()` did advance the Slice already, hence a call
+        // to `.data()` can directly be used.
+        const int* value_a = reinterpret_cast<const int*>(slice_a.data());
+        const int* value_b = reinterpret_cast<const int*>(slice_b.data());
+
+        // if (*value_a < *value_b) {
+        //     return -1;
+        // } else if (*value_a > *value_b) {
+        //     return 1;
+        // } else {
+        //     return 0;
+        // }
+        // return slice_a.compare(slice_b);
+
+        // // Specifically for R-tree as r-tree does not implement ordering
+        return 1;
+    }
+
+    void FindShortestSeparator(std::string* start,
+                               const rocksdb::Slice& limit) const {
+        return;
+    }
+
+    void FindShortSuccessor(std::string* key) const  {
+        return;
+    }
+};
+
 int main(int argc, char* argv[]) {
 
     std::string kDBPath = argv[1];
@@ -134,6 +173,8 @@ int main(int argc, char* argv[]) {
     // ZComparator cmp;
     NoiseComparator cmp;
     options.comparator = &cmp;
+    NoiseComparator1 sec_cmp;
+    options.sec_comparator = &sec_cmp;
 
     options.info_log_level = DEBUG_LEVEL;
     options.statistics = rocksdb::CreateDBStatistics();
@@ -188,8 +229,8 @@ int main(int argc, char* argv[]) {
     // options.force_consistency_checks = false;
 
     Status s;
-    s = DB::Open(options, kDBPath, &db);
-    std::cout << "Open DB status: " << s.ToString() << std::endl;
+    // s = DB::Open(options, kDBPath, &db);
+    // std::cout << "Open DB status: " << s.ToString() << std::endl;
 
     int id;
     double perimeter;
@@ -198,7 +239,7 @@ int main(int argc, char* argv[]) {
 
     // Failed to open, probably it doesn't exist yet. Try to create it and
     // insert data
-    if (!s.ok()) {
+    if (true) {
         options.create_if_missing = true;
         s = DB::Open(options, kDBPath, &db);
         std::cout << "Create if missing: " << s.ToString() << std::endl;
@@ -217,12 +258,13 @@ int main(int argc, char* argv[]) {
             lineCount++;
             std::string token;
             std::istringstream ss(line);
+            auto start = std::chrono::high_resolution_clock::now();
 
             // For dataset Buildings
-            // ss >> id >> perimeter >> low[0] >> low[1] >> high[0] >> high[1];
+            ss >> id >> perimeter >> low[0] >> low[1] >> high[0] >> high[1];
             
-            // For dataset Tweet
-            ss >> id >> low[0] >> low[1] >> high[0] >> high[1] >> perimeter;
+            // // For dataset Tweet
+            // ss >> id >> low[0] >> low[1] >> high[0] >> high[1] >> perimeter;
 
             std::string key = serialize_id(id);
             std::string value = serialize_value(perimeter);
@@ -234,7 +276,7 @@ int main(int argc, char* argv[]) {
                 value.pop_back();
             }
 
-            auto start = std::chrono::high_resolution_clock::now();
+            // auto start = std::chrono::high_resolution_clock::now();
             s = db->Put(WriteOptions(), key, value);
             auto end = std::chrono::high_resolution_clock::now();
             auto duration = std::chrono::duration_cast<std::chrono::nanoseconds>(end - start);
@@ -270,16 +312,16 @@ int main(int argc, char* argv[]) {
         std::cout << "end writing data" << std::endl;
         std::cout << "Execution time: " << totalDuration.count() << " nanoseconds" << std::endl;
 
-        sleep(1200);
-        std::string stats_value;
-        db->GetProperty("rocksdb.stats", &stats_value);
-        std::cout << stats_value << std::endl;
+        sleep(480);
+        // std::string stats_value;
+        // db->GetProperty("rocksdb.stats", &stats_value);
+        // std::cout << stats_value << std::endl;
 
         db->Close();
 
 
 
-        std::cout << "RocksDB stats: " << options.statistics->ToString() << std::endl;
+        // std::cout << "RocksDB stats: " << options.statistics->ToString() << std::endl;
 
         // std::string key1 = serialize_key(0, 516, 22.214);
         // std::cout << "key1: " << key1 << std::endl;
