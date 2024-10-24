@@ -455,7 +455,7 @@ class SkipListSecRep : public SkipListRep {
                     reinterpret_cast<RtreeIteratorContext*>(iterator_context);
                 Slice query_slice = Slice(context->query_mbr);
 
-                // TODO(Jiachen): auto change type of secondary query attribute
+                // TODO(PepperBun): auto change type of secondary query attribute
                 // Futurework: options for different sec value type
                 // Current solution: based on the size of the query slice
                 // if query_slice.size == 16: one-d value range

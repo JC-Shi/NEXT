@@ -1001,7 +1001,7 @@ class Version {
       int level, bool allow_unprepared_value);
 
   // For Global Secondary Index
-  // TODO(Jiachen) setting the variable based on the sec index type
+  // TODO(PepperBun) setting the variable based on the sec index type
   // Currently this may be mannually adjusted
   // (SecIndexType) Manually Changed is needed here
   typedef RTree<GlobalSecIndexValue, double, 1, double> GlobalSecRtree;
@@ -1503,12 +1503,12 @@ class VersionSet {
   }
 
   // For Global Secondary Index
-  // TODO(Jiachen) setting the variable based on the sec index type
+  // TODO(PepperBun) setting the variable based on the sec index type
   // Currently this may be mannually adjusted
   // (SecIndexType) Manually Changed is needed here
   typedef RTree<GlobalSecIndexValue, double, 1, double> GlobalSecRtree;
   GlobalSecRtree global_rtree_;
-  const char* global_rtree_loc_ = "/home/jiachen001/sdd/rocksdb/db_storage/globalrtree/Buildings_1D";
+  const char* global_rtree_loc_ = "<<Global Index Component Directory>>";
 
  protected:
   using VersionBuilderMap =

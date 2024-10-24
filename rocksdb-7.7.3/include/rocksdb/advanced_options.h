@@ -1065,7 +1065,7 @@ struct AdvancedColumnFamilyOptions {
   uint32_t memtable_protection_bytes_per_key = 0;
 
   // Enable global secondary index creation
-  // TODO(Jiachen): type of secondary index selection
+  // TODO(PepperBun): type of secondary index selection
   bool create_global_sec_index = false;
   char* global_sec_index_loc = nullptr;
   bool global_sec_index_is_spatial = true;

@@ -118,7 +118,7 @@ void OneDRtreeSecIndexIterator::SeekImpl(const Slice* target) {
 
   // std::cout << "First index entry value: " << ReadQueryMbr(block_iter_.key()) << std::endl;
 
-  // TODO(Jiachen) seek for a specific secondary attribute target
+  // TODO(PepperBun) seek for a specific secondary attribute target
   // if (target) {
   //   assert(!Valid() || (table_->get_rep()->index_key_includes_seq
   //                           ? (icomp_.Compare(*target, key()) <= 0)

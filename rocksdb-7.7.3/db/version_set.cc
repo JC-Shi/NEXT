@@ -2237,7 +2237,7 @@ Version::Version(ColumnFamilyData* column_family_data, VersionSet* vset,
       // global_rtree_(vset->global_rtree_)
        {
         if (mutable_cf_options.create_global_sec_index) {
-          // TODO(Jiachen) based on the secondary index type
+          // TODO(PepperBun) based on the secondary index type
           // the global_sec_index shall load different files
           // global_rtree_.Load(mutable_cf_options.global_sec_index_loc);
           global_rtree_ = &vset->global_rtree_;

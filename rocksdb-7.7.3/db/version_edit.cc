@@ -84,7 +84,7 @@ Status FileMetaData::UpdateBoundaries(const Slice& key, const Slice& value,
   // sketch.addMbr(key_mbr);
 
   // For secondary index, update mbr and sketch based on the value
-  // TODO(Jiachen)
+  // TODO(PepperBun)
   // for different secondary attributes,
   // different meta data shall be used
   // support for different attribute will be added later

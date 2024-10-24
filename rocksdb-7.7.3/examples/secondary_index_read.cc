@@ -147,8 +147,6 @@ public:
 
 int main(int argc, char* argv[]) {
 
-    // std::ofstream logfile;
-    // logfile.open("/home/jiachen001/sdd/rocksdb/db_storage/buildings_2D_01res.txt");
 
     std::string kDBPath = argv[1];
     int querySize = int(atoi(argv[2]));
