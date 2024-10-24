@@ -70,17 +70,37 @@ public:
         const int* value_a = reinterpret_cast<const int*>(slice_a.data());
         const int* value_b = reinterpret_cast<const int*>(slice_b.data());
 
-        // if (*value_a < *value_b) {
-        //     return -1;
-        // } else if (*value_a > *value_b) {
-        //     return 1;
-        // } else {
-        //     return 0;
-        // }
 
-        // return slice_a.compare(slice_b);
+        return slice_a.compare(slice_b);
+    }
 
-        // // Specifically for R-tree as r-tree does not implement ordering
+    void FindShortestSeparator(std::string* start,
+                               const rocksdb::Slice& limit) const {
+        return;
+    }
+
+    void FindShortSuccessor(std::string* key) const  {
+        return;
+    }
+};
+
+class NoiseComparator1 : public rocksdb::Comparator {
+public:
+    const char* Name() const {
+        return "rocksdb.NoiseComparator";
+    }
+
+    int Compare(const rocksdb::Slice& const_a, const rocksdb::Slice& const_b) const {
+        Slice slice_a = Slice(const_a);
+        Slice slice_b = Slice(const_b);
+
+        // keypaths are the same, compare the value. The previous
+        // `GetLengthPrefixedSlice()` did advance the Slice already, hence a call
+        // to `.data()` can directly be used.
+        const int* value_a = reinterpret_cast<const int*>(slice_a.data());
+        const int* value_b = reinterpret_cast<const int*>(slice_b.data());
+
+        // specific comparator to allow random output order
         return 1;
     }
 
@@ -106,9 +126,10 @@ int main(int argc, char* argv[]) {
     DB* db;
     Options options;
 
-    // ZComparator4SecondaryIndex cmp;
     NoiseComparator cmp;
     options.comparator = &cmp;
+    NoiseComparator1 cmp1;
+    options.sec_comparator = &cmp1;
 
     options.info_log_level = DEBUG_LEVEL;
     options.statistics = rocksdb::CreateDBStatistics();
@@ -122,17 +143,14 @@ int main(int argc, char* argv[]) {
     
     // For global secondary index in memory
     options.create_global_sec_index = true; // to activate the global sec index
-    options.global_sec_index_loc = argv[4];
     options.global_sec_index_is_spatial = false;
 
     // Set the block cache to 64 MB
     block_based_options.block_cache = rocksdb::NewLRUCache(64 * 1024 * 1024);
-    // block_based_options.max_auto_readahead_size = 0;
-    // block_based_options.index_type = BlockBasedTableOptions::KRtreeSecSearch;
+
     options.table_factory.reset(NewBlockBasedTableFactory(block_based_options));
     options.memtable_factory.reset(new rocksdb::SkipListSecFactory);
 
-    // options.check_flush_compaction_key_order = false;
     options.force_consistency_checks = false;
 
     Status s;
@@ -176,16 +194,6 @@ int main(int argc, char* argv[]) {
     std::cout << "Execution time: " << totalDuration.count() << " nanoseconds" << std::endl;
 
     db->Close();    
-    // resFile.close();
-
-    // for (int i=0; i < dataSize; i++) {
-    //     std::string q_key = serialize_id(i);
-    //     s = db->Get(ReadOptions(), q_key, &q_value);
-    //     // Slice val_slice = decode_value(q_value);
-    //     Val val = deserialize_val(q_value);
-    //     std::cout << "query results: " << val.mbr.first << "," << val.mbr.second << std::endl;
-    // }
-
 
     delete db;
 

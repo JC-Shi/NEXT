@@ -96,17 +96,8 @@ public:
         const int* value_a = reinterpret_cast<const int*>(slice_a.data());
         const int* value_b = reinterpret_cast<const int*>(slice_b.data());
 
-        // if (*value_a < *value_b) {
-        //     return -1;
-        // } else if (*value_a > *value_b) {
-        //     return 1;
-        // } else {
-        //     return 0;
-        // }
         return slice_a.compare(slice_b);
 
-        // // Specifically for R-tree as r-tree does not implement ordering
-        // return 1;
     }
 
     void FindShortestSeparator(std::string* start,
@@ -135,16 +126,7 @@ public:
         const int* value_a = reinterpret_cast<const int*>(slice_a.data());
         const int* value_b = reinterpret_cast<const int*>(slice_b.data());
 
-        // if (*value_a < *value_b) {
-        //     return -1;
-        // } else if (*value_a > *value_b) {
-        //     return 1;
-        // } else {
-        //     return 0;
-        // }
-        // return slice_a.compare(slice_b);
-
-        // // Specifically for R-tree as r-tree does not implement ordering
+        // specific comparator to allow random output order
         return 1;
     }
 
@@ -169,8 +151,6 @@ int main(int argc, char* argv[]) {
     DB* db;
     Options options;
 
-    // ZComparator4SecondaryIndex cmp;
-    // ZComparator cmp;
     NoiseComparator cmp;
     options.comparator = &cmp;
     NoiseComparator1 sec_cmp;
@@ -181,27 +161,9 @@ int main(int argc, char* argv[]) {
 
     options.max_write_buffer_number = 5;
     options.max_background_jobs = 8;   
-    // options.compaction_pri = kMinMbr;
-    // std::cout << "compatction_pri = " << options.compaction_pri << std::endl;
-    // options.stats_dump_period_sec = 5;
-    // options.compaction_output_selection = kByScoreFunction;
-    // options.compaction_output_selection = kByMbrOverlappingArea;
-    // options.compaction_output_selection = OneDKeyRangeOnly;
-
-    // Setting k using the max_compaction_output_files_selected
-    // k is the number of files in the output level selected for compaction
-    // options.max_compaction_output_files_selected = 5;
-    // std::cout << "compatction_output_selection = " << options.compaction_output_selection << std::endl;
 
     BlockBasedTableOptions block_based_options;
 
-    // Set the block cache to 64 MB
-    // block_based_options.block_cache = rocksdb::NewLRUCache(64 * 1024 * 1024);
-    // block_based_options.index_type = BlockBasedTableOptions::kRtreeSearch;
-    // block_based_options.index_type = BlockBasedTableOptions::kTwoLevelIndexSearch;
-//    block_based_options.flush_block_policy_factory.reset(
-//            new NoiseFlushBlockPolicyFactory());
-    
     // For per file secondary index in SST file
     block_based_options.create_secondary_index = true;
     block_based_options.create_sec_index_reader = true;
@@ -209,28 +171,19 @@ int main(int argc, char* argv[]) {
     
     // For global secondary index in memory
     options.create_global_sec_index = true;
-    options.global_sec_index_loc = argv[4];
+    // To indicate the index attribute type
     options.global_sec_index_is_spatial = false;
 
-    // block_based_options.index_type = BlockBasedTableOptions::KRtreeSecSearch;
     options.table_factory.reset(NewBlockBasedTableFactory(block_based_options));
     options.memtable_factory.reset(new rocksdb::SkipListSecFactory);
     
-    // options.memtable_factory.reset(new rocksdb::SkipListMbrFactory);
-    // options.memtable_factory.reset(new rocksdb::RTreeFactory);
     options.allow_concurrent_memtable_write = false;
 
     // Set the write buffer size to 64 MB
     options.write_buffer_size = 64 * 1024 * 1024;
 
-    // options.level0_file_num_compaction_trigger = 2;
-    // options.max_bytes_for_level_base = 512 * 1024 * 1024;
-    // options.check_flush_compaction_key_order = false;
-    // options.force_consistency_checks = false;
 
     Status s;
-    // s = DB::Open(options, kDBPath, &db);
-    // std::cout << "Open DB status: " << s.ToString() << std::endl;
 
     int id;
     double perimeter;
@@ -283,26 +236,6 @@ int main(int argc, char* argv[]) {
             totalDuration = totalDuration + duration;
         }
 
-        // for (int i = 0; i < dataSize; i++){
-        //     dataFile >> op >> id >> low[0] >> low[1] >> high[0] >> high[1];
-        //     // if (i < 50) {
-        //     //     std::cout << op << " " << id << " " << low[0] << " " << low[1] << " " << high[0] << " " << high[1] << std::endl;
-        //     // }
-        //     // std::string key = serialize_key(id, low[0], low[1]);
-        //     std::string key = serialize_id(id);
-        //     std::string value = serialize_value(low[0]);
-
-        //     // std::cout << "In Key: " << id << low[0] << low[1] << std::endl;
-        //     // Put key-value
-        //     auto start = std::chrono::high_resolution_clock::now();
-        //     s = db->Put(WriteOptions(), key, value);
-        //     // std::cout << "write first data" << std::endl;
-        //     auto end = std::chrono::high_resolution_clock::now(); 
-        //     auto duration = std::chrono::duration_cast<std::chrono::nanoseconds>(end - start);
-        //     totalDuration = totalDuration + duration;
-        //     // std::cout << "In Status: " << s.ToString() << std::endl;
-        //     // assert(s.ok());
-        // }
 
         std::cout << "Status: " << s.ToString() << std::endl;
         assert(s.ok());
@@ -313,41 +246,13 @@ int main(int argc, char* argv[]) {
         std::cout << "Execution time: " << totalDuration.count() << " nanoseconds" << std::endl;
 
         sleep(480);
-        // std::string stats_value;
-        // db->GetProperty("rocksdb.stats", &stats_value);
-        // std::cout << stats_value << std::endl;
 
         db->Close();
 
-
-
-        // std::cout << "RocksDB stats: " << options.statistics->ToString() << std::endl;
-
-        // std::string key1 = serialize_key(0, 516, 22.214);
-        // std::cout << "key1: " << key1 << std::endl;
-
-        // // Put key-value
-        // s = db->Put(WriteOptions(), key1, "");
-        // assert(s.ok());
-
-        // std::string key2 = serialize_key(1, 1124, 4.1432);
-        // std::cout << "key2: " << key2 << std::endl;
-        // s = db->Put(WriteOptions(), key2, "");
-        // assert(s.ok());
     }
 
 
     delete db;
-
-    // s = DB::Open(options, kDBPath, &db);
-    // // std::string stats_value;
-    // // db->GetProperty("rocksdb.stats", &stats_value);
-    // s = db->Close();
-
-    // // std::cout << stats_value << std::endl;
-
-    // std::cout << "RocksDB stats: " << options.statistics->ToString() << std::endl;
-
 
     return 0;
 }

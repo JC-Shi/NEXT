@@ -54,21 +54,6 @@ int deserialize_key(Slice val_slice) {
     return id;
 }
 
-// struct Val {
-//     Mbr mbr;
-// };
-
-// Val deserialize_val(Slice val_slice) {
-//     Val val;
-//     val.mbr = ReadValueMbr(val_slice);
-//     return val;
-// }
-
-// double deserialize_val(Slice val_slice) {
-//     double val;
-//     val = *reinterpret_cast<const double*>(val_slice.data());
-//     return val;
-// }
 
 
 class NoiseComparator : public rocksdb::Comparator {
@@ -87,17 +72,8 @@ public:
         const int* value_a = reinterpret_cast<const int*>(slice_a.data());
         const int* value_b = reinterpret_cast<const int*>(slice_b.data());
 
-        // if (*value_a < *value_b) {
-        //     return -1;
-        // } else if (*value_a > *value_b) {
-        //     return 1;
-        // } else {
-        //     return 0;
-        // }
         return slice_a.compare(slice_b);
 
-        // // Specifically for R-tree as r-tree does not implement ordering
-        // return 1;
     }
 
     void FindShortestSeparator(std::string* start,
@@ -126,16 +102,6 @@ public:
         const int* value_a = reinterpret_cast<const int*>(slice_a.data());
         const int* value_b = reinterpret_cast<const int*>(slice_b.data());
 
-        // if (*value_a < *value_b) {
-        //     return -1;
-        // } else if (*value_a > *value_b) {
-        //     return 1;
-        // } else {
-        //     return 0;
-        // }
-        // return slice_a.compare(slice_b);
-
-        // // Specifically for R-tree as r-tree does not implement ordering
         return 1;
     }
 
@@ -193,14 +159,6 @@ int main(int argc, char* argv[]) {
 
     // Set the write buffer size to 64 MB
     options.write_buffer_size = 16 * 1024 * 1024;
-
- 
-    // options.max_open_files = -1;
-    // std::string secondarydbpath = argv[6];
-
-    // DB* ro_db = nullptr;
-    // auto s_ro = DB::OpenAsSecondary(options, kDBPath, secondarydbpath, &ro_db);
-    // std::cout << "Open readonly DB status: " << s_ro.ToString() << std::endl;
 
     Status s;
     s = DB::Open(options, kDBPath, &db);
@@ -364,11 +322,6 @@ int main(int argc, char* argv[]) {
     std::cout << "Execution time: " << totalDuration.count() << "nanoseconds" << std::endl;
     resFile << "Total Duration: \t" << totalDuration.count() << "\n";
     std::cout << "Total number of write: " << write_c << "; Total number of queries: " << query_c << "; Total number of updates: " << update_c << std::endl; 
-
-    // ro_db->Close();
-    // delete ro_db;
-
-    // sleep(120);
 
     db->Close();
     resFile.close();    
