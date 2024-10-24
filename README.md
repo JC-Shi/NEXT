@@ -1,5 +1,7 @@
 # NEXT (ROCKSDB + LSM-based Secondary Index) 
 
+![Alt text](/FrontPage.png)
+
 ## Usage
 
 To install RocksDB: Visit https://github.com/facebook/rocksdb/blob/main/INSTALL.md .
