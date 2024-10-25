@@ -34,7 +34,7 @@ make secondary_index_write_num
 ./secondary_index_write_num <Directory of the DB> <DB Size> <DB Source File>
 ```
 
-To run static spatial database reading
+To run static numerical database reading
 ```
 cd examples
 make secondary_index_read_num
