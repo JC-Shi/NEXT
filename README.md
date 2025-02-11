@@ -3,7 +3,9 @@
 ![Alt text](/FrontPage.png)
 
 This is a prototype implementation of NEXT for RocksDB. NEXT is a new LSM-based secondary index framework that utilizes a two-level structure to improve non-key attribute query performance. 
-More information about NEXT can be found in the paper "NEXT: A New Secondary Index Framework for LSM-based Data Storage" which is accepted by SIGMOD 2025.
+More information about NEXT can be found in the paper "NEXT: A New Secondary Index Framework for LSM-based Data Storage" which is accepted by SIGMOD 2025. The Figure below shows an overview of NEXT which consists of per-segment components in SST files and a global index component resides in RAM.
+
+![Alt text](/next_overview.png)
 
 ## Usage
 
